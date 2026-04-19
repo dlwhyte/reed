@@ -1,87 +1,107 @@
-# Reader
+# reed
 
-A personal read-it-later app. Pocket-style clean reader view, saved articles live on your Mac, AI summaries + auto-tags + chat-with-article powered by Cohere.
+A personal read-it-later app that runs on your Mac. Pocket-style clean reader with a **Cohere-powered research agent** that can search your library, read saved articles, and browse the web to dig into whatever you're reading.
+
+## Why
+
+Pocket shut down in July 2025. This is a local-first replacement: your data lives in a single SQLite file on your Mac, never leaves, and the app keeps working even without an internet connection or LLM API key.
+
+## Features
+
+**Reader**
+- Save any URL → clean article extraction (trafilatura)
+- Reader view: serif/sans, adjustable font size + width, light / dark / sepia
+- Library with unread / favorites / archived / all tabs, sortable
+- Manual + auto tags, keyword search (SQLite FTS5)
+- Bookmarklet for one-click saving from any browser
+
+**LLM (Cohere)**
+- Auto-summary (1-line + TLDR) and auto-tags on save
+- Semantic search across your library (Embed v3)
+- Chat with any article (streaming)
+- "Similar articles" via embedding cosine with similarity threshold
+
+**Research Companion agent**
+- Tool-using loop on Command A: `search_library`, `read_article`, `search_web`
+- Streams agent trace: plan → tool calls → results → synthesized answer
+- Inline `[1]`, `[2]` citations that link to a Sources list
+- Optional web search via Tavily (free tier)
+
+**Ops**
+- Single URL (`http://localhost:8765`) — backend serves built frontend
+- `launchd` plist for always-on (auto-start on login, auto-restart on crash)
+- Zero third-party runtime dependencies besides Cohere + optional Tavily
 
 ## Stack
 
-- **Backend**: FastAPI + SQLite (+ FTS5 full-text search) + trafilatura (content extraction)
+- **Backend**: FastAPI + SQLite (+ FTS5) + trafilatura + Cohere Python SDK
 - **Frontend**: Vite + React + TypeScript + Tailwind
-- **LLM**: Cohere (Command A for summaries/chat, Embed v3 for semantic search)
-- **Data**: `~/ReaderData/reader.db` — all yours, back it up
+- **Data**: `~/ReaderData/reader.db` (single file, easy to back up)
 
 ## Setup
 
 ```bash
-# 1. Copy env template and add your Cohere key
+git clone https://github.com/dlwhyte/reed.git
+cd reed
+
+# 1. API keys
 cp .env.example .env
-# edit .env — paste COHERE_API_KEY
+# edit .env:
+#   COHERE_API_KEY=...    (required for LLM features; dashboard.cohere.com)
+#   TAVILY_API_KEY=...    (optional; tavily.com free tier enables web search)
 
-# 2. Backend (first run creates venv + installs deps)
-./backend/run.sh
-# → http://localhost:8765
-
-# 3. Frontend (separate terminal)
+# 2. Build the frontend (produces frontend/dist/ which the backend serves)
 cd frontend
-npm run dev
-# → http://localhost:5173
+npm install
+npm run build
+cd ..
+
+# 3. First run — creates venv, installs deps, starts server
+./backend/run.sh
 ```
 
-Visit **http://localhost:5173** to use the app.
+Open **http://localhost:8765**.
 
 ## Always-on (launchd)
 
-Run the backend automatically on Mac login, restart on crash:
+Run the backend automatically on Mac login, restart on crash, never think about it again:
 
 ```bash
 ./scripts/install-launchd.sh
 ```
 
-Then bookmark `http://localhost:5173` (or serve the built frontend alongside).
+Backend now answers at `http://localhost:8765` whenever your Mac is on. Logs: `./logs/reader.{out,err}.log`.
 
-To stop / uninstall:
-
-```bash
-./scripts/uninstall-launchd.sh
-```
-
-Logs: `./logs/reader.out.log`, `./logs/reader.err.log`
-
-## Features
-
-- Save any URL → extracts clean article text
-- Reader view: serif/sans, adjustable font size + width, light/dark/sepia themes
-- Library: unread / favorites / archived, sortable
-- Tags: manual + auto (LLM)
-- Keyword search (SQLite FTS5)
-- Semantic search (Cohere embeddings)
-- "Chat with article" — Q&A over the content
-- Similar articles (embedding cosine)
-- Bookmarklet for one-click saving from any browser
+Stop / uninstall: `./scripts/uninstall-launchd.sh`.
 
 ## Bookmarklet
 
-Go to **Settings → Bookmarklet** and drag the button to your bookmarks bar. Click it on any page to save.
+Go to **Settings → Bookmarklet** and drag the button to your browser's bookmarks bar. Click it on any article to save directly to reed.
+
+Works cross-origin from HTTPS pages (opens a tiny popup to the local backend, closes itself after saving).
 
 ## Project layout
 
 ```
-reader/
+reed/
 ├── backend/
-│   ├── app/               # FastAPI app
-│   │   ├── main.py        # routes
-│   │   ├── db.py          # SQLite schema + helpers
-│   │   ├── extractor.py   # trafilatura-based content extraction
-│   │   ├── cohere_client.py  # LLM calls
+│   ├── app/
+│   │   ├── main.py            # FastAPI routes + SPA serving
+│   │   ├── db.py              # SQLite schema, FTS5 triggers
+│   │   ├── extractor.py       # trafilatura-based article extraction
+│   │   ├── cohere_client.py   # Cohere calls: chat, embed, stream
+│   │   ├── agent.py           # research agent: tool defs + loop
 │   │   └── config.py
 │   ├── requirements.txt
-│   └── run.sh             # venv + uvicorn
+│   └── run.sh
 ├── frontend/
 │   └── src/
 │       ├── App.tsx
-│       ├── pages/         # Library, Reader, Settings
-│       ├── components/    # SaveBar, ArticleCard, ChatPanel
-│       ├── lib/api.ts     # fetch wrappers + SSE stream
-│       └── store.ts       # user prefs
+│       ├── pages/             # Library, Reader, Settings
+│       ├── components/        # SaveBar, ArticleCard, ChatPanel,
+│       │                      # ResearchPanel (with citation parser)
+│       ├── lib/api.ts         # fetch wrappers + SSE streams
+│       └── store.ts
 ├── scripts/
 │   ├── com.user.reader.plist
 │   ├── install-launchd.sh
@@ -90,10 +110,10 @@ reader/
 └── .gitignore
 ```
 
-## Disabling LLM features
+## Disable LLM features
 
-Set `ENABLE_LLM=false` in `.env`, or remove the key. The app still works as a pure reader — summaries, chat, and semantic search will be disabled.
+Set `ENABLE_LLM=false` in `.env` or leave `COHERE_API_KEY` empty. Reader keeps working — only summaries, auto-tags, chat, semantic search, and research agent are skipped.
 
-## What's not in v1
+## License
 
-RSS, email-to-save, Chrome extension, iOS share sheet, highlights UI, reading stats — all candidates for Phase 2.
+MIT — see [LICENSE](LICENSE).
