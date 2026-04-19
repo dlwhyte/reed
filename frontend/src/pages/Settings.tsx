@@ -6,7 +6,18 @@ export default function Settings() {
   const { prefs, setPrefs } = useStore();
   const [cfg, setCfg] = useState<any>(null);
   const [health, setHealth] = useState<any>(null);
-  const bookmarklet = `javascript:(()=>{window.open('http://localhost:8765/save?url='+encodeURIComponent(location.href),'reader_save','width=420,height=220,top=100,left=100')})();`;
+  const origin = typeof window !== "undefined" ? window.location.origin : "";
+  const saveUrl = `${origin}/api/save`;
+  const bookmarklet = `javascript:(()=>{window.open('${origin}/save?url='+encodeURIComponent(location.href),'reader_save','width=420,height=220,top=100,left=100')})();`;
+  const [copiedField, setCopiedField] = useState<string | null>(null);
+
+  const copy = async (text: string, field: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedField(field);
+      setTimeout(() => setCopiedField(null), 1500);
+    } catch {}
+  };
 
   useEffect(() => {
     api.config().then(setCfg).catch(() => {});
@@ -79,6 +90,55 @@ export default function Settings() {
         >
           📖 Save to Reader
         </a>
+      </section>
+
+      <section>
+        <h2 className="font-semibold mb-3">Save from iPhone</h2>
+        <p className="text-sm text-neutral-500 mb-4">
+          Set up a one-time iOS Shortcut so "Save to reed" appears in the Share Sheet of Safari, Twitter, Reddit, and any app that can share a URL.
+        </p>
+
+        <div className="rounded-lg border border-neutral-200 dark:border-neutral-800 p-4 space-y-3 text-sm">
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <div className="text-xs text-neutral-500">Save endpoint (paste into Shortcut)</div>
+              <code className="text-xs break-all">{saveUrl}</code>
+            </div>
+            <button
+              onClick={() => copy(saveUrl, "save")}
+              className="px-3 py-1.5 rounded border border-neutral-300 dark:border-neutral-700 text-xs whitespace-nowrap"
+            >
+              {copiedField === "save" ? "✓ Copied" : "Copy"}
+            </button>
+          </div>
+
+          <ol className="text-sm space-y-2 list-decimal ml-5 pt-2 border-t border-neutral-200 dark:border-neutral-800">
+            <li>Open the <strong>Shortcuts</strong> app on your iPhone.</li>
+            <li>Tap <strong>+</strong> to create a new shortcut.</li>
+            <li>Tap <strong>Add Action</strong>, search for and add <strong>"Get Contents of URL"</strong>.</li>
+            <li>In the URL field, paste the save endpoint above.</li>
+            <li>Tap <strong>Show More</strong> on the action. Set:
+              <ul className="list-disc ml-5 mt-1">
+                <li><strong>Method</strong>: POST</li>
+                <li><strong>Request Body</strong>: JSON</li>
+                <li>Under Request Body, tap <strong>Add new field</strong>:
+                  <ul className="list-disc ml-5">
+                    <li>Key: <code>url</code></li>
+                    <li>Type: Text</li>
+                    <li>Value: tap the field, then select <strong>Shortcut Input</strong> (from the variables bar above the keyboard)</li>
+                  </ul>
+                </li>
+              </ul>
+            </li>
+            <li>Tap the <strong>ⓘ</strong> info button. Enable <strong>"Use with Share Sheet"</strong>. Under Share Sheet Types, check only <strong>URLs</strong>.</li>
+            <li>Rename the shortcut to <strong>"Save to reed"</strong> (tap the name at the top).</li>
+            <li>Tap <strong>Done</strong>.</li>
+          </ol>
+
+          <div className="text-xs text-neutral-500 pt-2 border-t border-neutral-200 dark:border-neutral-800">
+            <strong>Using it:</strong> In any app, tap <strong>Share</strong> → scroll and tap <strong>"Save to reed"</strong>. Article appears in your library.
+          </div>
+        </div>
       </section>
 
       <section>

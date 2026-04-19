@@ -110,6 +110,37 @@ async def save(req: SaveReq):
         return {"id": cur.lastrowid, "duplicate": False, "title": article["title"]}
 
 
+@app.get("/share", response_class=HTMLResponse)
+async def share_target(
+    url: str | None = None,
+    text: str | None = None,
+    title: str | None = None,
+):
+    """Web Share Target endpoint (PWA share_target spec).
+    Extracts a URL from url/text/title fields and saves it, then redirects to library."""
+    import re as _re
+    candidate = url or ""
+    if not candidate and text:
+        m = _re.search(r"https?://\S+", text)
+        if m:
+            candidate = m.group(0).rstrip(').,;:!?"\'')
+    if not candidate and title:
+        m = _re.search(r"https?://\S+", title)
+        if m:
+            candidate = m.group(0).rstrip(').,;:!?"\'')
+
+    if not candidate.startswith(("http://", "https://")):
+        return HTMLResponse(
+            "<!doctype html><meta charset=utf-8><title>reed</title>"
+            "<body style=\"font:15px -apple-system;margin:40px;\">"
+            "<h2>No URL found in share</h2>"
+            "<p>Try sharing a link directly.</p>"
+            "<p><a href=\"/\">Back to reed</a></p></body>",
+            status_code=400,
+        )
+    return await save_via_get(candidate)
+
+
 @app.get("/save", response_class=HTMLResponse)
 async def save_via_get(url: str):
     """GET save endpoint for the bookmarklet (works from HTTPS pages via popup)."""
@@ -422,6 +453,6 @@ if FRONTEND_DIST.exists():
     async def spa(full_path: str):
         # Never shadow API / bookmarklet routes (FastAPI registers in order,
         # but belt-and-suspenders: reject anything api-looking here too).
-        if full_path.startswith(("api/", "save")):
+        if full_path.startswith(("api/", "save", "share")):
             raise HTTPException(404)
         return FileResponse(FRONTEND_DIST / "index.html")
