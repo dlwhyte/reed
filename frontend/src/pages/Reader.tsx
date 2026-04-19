@@ -60,7 +60,16 @@ export default function Reader() {
             {article.site_name}
           </div>
           <div className="flex items-center gap-1 relative">
-            {/* Primary actions (always visible) */}
+            {/* Primary actions (always visible, including mobile) */}
+            <a
+              href={article.url}
+              target="_blank"
+              rel="noreferrer"
+              className="p-2 rounded hover:bg-neutral-100 dark:hover:bg-neutral-800"
+              title="Open original"
+            >
+              <ExternalLink className="w-5 h-5" />
+            </a>
             {llmReady && (
               <>
                 <button
@@ -126,14 +135,6 @@ export default function Reader() {
               >
                 {article.is_archived ? <ArchiveRestore className="w-5 h-5" /> : <Archive className="w-5 h-5" />}
               </button>
-              <a
-                href={article.url}
-                target="_blank"
-                rel="noreferrer"
-                className="p-2 rounded hover:bg-neutral-100 dark:hover:bg-neutral-800"
-              >
-                <ExternalLink className="w-5 h-5" />
-              </a>
             </div>
 
             {/* Mobile: More menu */}
@@ -205,16 +206,6 @@ export default function Reader() {
                     {article.is_archived ? <ArchiveRestore className="w-4 h-4" /> : <Archive className="w-4 h-4" />}
                     {article.is_archived ? "Unarchive" : "Archive"}
                   </button>
-                  <a
-                    href={article.url}
-                    target="_blank"
-                    rel="noreferrer"
-                    onClick={() => setMoreOpen(false)}
-                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-neutral-100 dark:hover:bg-neutral-900"
-                  >
-                    <ExternalLink className="w-4 h-4" />
-                    Open original
-                  </a>
                 </div>
               </>
             )}
