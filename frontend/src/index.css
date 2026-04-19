@@ -1,0 +1,52 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light dark;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  @apply bg-neutral-50 text-neutral-900 antialiased;
+}
+
+.dark body {
+  @apply bg-neutral-950 text-neutral-100;
+}
+
+.reader-prose {
+  @apply leading-relaxed;
+}
+.reader-prose h1,
+.reader-prose h2,
+.reader-prose h3 {
+  @apply font-semibold mt-8 mb-3;
+}
+.reader-prose h1 { @apply text-3xl; }
+.reader-prose h2 { @apply text-2xl; }
+.reader-prose h3 { @apply text-xl; }
+.reader-prose p { @apply my-4; }
+.reader-prose a { @apply underline underline-offset-2; }
+.reader-prose blockquote {
+  @apply border-l-4 border-neutral-300 dark:border-neutral-700 pl-4 italic my-4;
+}
+.reader-prose ul { @apply list-disc ml-6 my-3; }
+.reader-prose ol { @apply list-decimal ml-6 my-3; }
+.reader-prose pre {
+  @apply bg-neutral-100 dark:bg-neutral-900 p-3 rounded overflow-x-auto my-4 text-sm;
+}
+.reader-prose code {
+  @apply bg-neutral-100 dark:bg-neutral-900 px-1 rounded text-sm;
+}
+.reader-prose img { @apply rounded my-4 max-w-full h-auto; }
+
+.theme-sepia {
+  background-color: #f4ecd8 !important;
+  color: #5b4636 !important;
+}
