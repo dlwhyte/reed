@@ -10,4 +10,5 @@ if [ ! -d ".venv" ]; then
 fi
 
 PORT="${PORT:-8765}"
-exec .venv/bin/uvicorn app.main:app --host 127.0.0.1 --port "$PORT"
+HOST="${HOST:-0.0.0.0}"
+exec .venv/bin/uvicorn app.main:app --host "$HOST" --port "$PORT"
