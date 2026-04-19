@@ -70,7 +70,7 @@ export default function ArticleCard({
             ))}
           </div>
         )}
-        <div className="flex gap-1 mt-3 opacity-0 group-hover:opacity-100 transition">
+        <div className="flex gap-1 mt-3 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition">
           <button onClick={toggleFav} className="p-1.5 rounded hover:bg-neutral-100 dark:hover:bg-neutral-800">
             <Star className={`w-4 h-4 ${article.is_favorite ? "fill-yellow-500 text-yellow-500" : ""}`} />
           </button>

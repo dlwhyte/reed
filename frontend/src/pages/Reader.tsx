@@ -6,7 +6,7 @@ import ResearchPanel from "../components/ResearchPanel";
 import { useStore } from "../store";
 import {
   ArrowLeft, Star, Archive, ArchiveRestore, ExternalLink,
-  Type, Minus, Plus, MessageSquare, Sun, Moon, Coffee, FlaskConical,
+  Type, Minus, Plus, MessageSquare, Sun, Moon, Coffee, FlaskConical, X,
 } from "lucide-react";
 
 export default function Reader() {
@@ -68,20 +68,20 @@ export default function Reader() {
             </button>
             <button
               onClick={() => setPrefs({ font: prefs.font === "serif" ? "sans" : "serif" })}
-              className="p-2 rounded hover:bg-neutral-100 dark:hover:bg-neutral-800"
+              className="hidden sm:block p-2 rounded hover:bg-neutral-100 dark:hover:bg-neutral-800"
               title="Font"
             >
               <Type className="w-5 h-5" />
             </button>
             <button
               onClick={() => setPrefs({ fontSize: Math.max(14, prefs.fontSize - 1) })}
-              className="p-2 rounded hover:bg-neutral-100 dark:hover:bg-neutral-800"
+              className="hidden sm:block p-2 rounded hover:bg-neutral-100 dark:hover:bg-neutral-800"
             >
               <Minus className="w-5 h-5" />
             </button>
             <button
               onClick={() => setPrefs({ fontSize: Math.min(24, prefs.fontSize + 1) })}
-              className="p-2 rounded hover:bg-neutral-100 dark:hover:bg-neutral-800"
+              className="hidden sm:block p-2 rounded hover:bg-neutral-100 dark:hover:bg-neutral-800"
             >
               <Plus className="w-5 h-5" />
             </button>
@@ -135,8 +135,8 @@ export default function Reader() {
 
       <div className="flex">
         <main
-          className={`flex-1 mx-auto py-10 px-6 ${fontClass}`}
-          style={{ maxWidth: `${prefs.width}px`, fontSize: `${prefs.fontSize}px` }}
+          className={`flex-1 mx-auto py-6 sm:py-10 px-4 sm:px-6 w-full ${fontClass}`}
+          style={{ maxWidth: `min(${prefs.width}px, 100%)`, fontSize: `${prefs.fontSize}px` }}
         >
           <h1 className="text-4xl font-bold leading-tight mb-4">{article.title}</h1>
           <div className="text-sm text-neutral-500 mb-8 flex items-center gap-2 flex-wrap">
@@ -174,12 +174,26 @@ export default function Reader() {
         </main>
 
         {panel === "chat" && (
-          <aside className="w-96 border-l border-neutral-200 dark:border-neutral-800 sticky top-14 h-[calc(100vh-3.5rem)]">
+          <aside className="fixed inset-0 top-14 z-30 bg-white dark:bg-neutral-950 md:sticky md:inset-auto md:top-14 md:z-auto md:w-96 md:border-l md:border-neutral-200 md:dark:border-neutral-800 md:h-[calc(100vh-3.5rem)]">
+            <button
+              onClick={() => setPanel("none")}
+              className="md:hidden absolute top-2 right-2 z-10 p-2 rounded hover:bg-neutral-100 dark:hover:bg-neutral-800"
+              title="Close"
+            >
+              <X className="w-5 h-5" />
+            </button>
             <ChatPanel articleId={article.id} llmReady={llmReady} />
           </aside>
         )}
         {panel === "research" && (
-          <aside className="w-[28rem] border-l border-neutral-200 dark:border-neutral-800 sticky top-14 h-[calc(100vh-3.5rem)]">
+          <aside className="fixed inset-0 top-14 z-30 bg-white dark:bg-neutral-950 md:sticky md:inset-auto md:top-14 md:z-auto md:w-[28rem] md:border-l md:border-neutral-200 md:dark:border-neutral-800 md:h-[calc(100vh-3.5rem)]">
+            <button
+              onClick={() => setPanel("none")}
+              className="md:hidden absolute top-2 right-2 z-10 p-2 rounded hover:bg-neutral-100 dark:hover:bg-neutral-800"
+              title="Close"
+            >
+              <X className="w-5 h-5" />
+            </button>
             <ResearchPanel articleId={article.id} llmReady={llmReady} webReady={webReady} />
           </aside>
         )}
