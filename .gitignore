@@ -34,3 +34,11 @@ data/
 # Logs
 logs/
 *.log
+
+# iOS / Capacitor build artifacts
+frontend/ios/App/Pods/
+frontend/ios/App/App.xcworkspace/xcuserdata/
+frontend/ios/App/App.xcodeproj/xcuserdata/
+frontend/ios/App/build/
+frontend/ios/DerivedData/
+*.xcuserstate

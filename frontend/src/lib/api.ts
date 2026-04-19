@@ -21,7 +21,16 @@ export type Article = {
   similarity?: number;
 };
 
-const BASE = "/api";
+// When running in the Capacitor native wrapper (iOS app), the frontend is
+// loaded from the app bundle (not the reed backend), so relative /api URLs
+// won't work. Point it at the Mac's Tailscale hostname instead.
+// Override via localStorage.setItem("reed.backend", "http://..."); useful for
+// friends pointing at their own mac, or after a hostname change.
+const isNative = typeof window !== "undefined" && !!(window as any).Capacitor?.isNativePlatform?.();
+const DEFAULT_NATIVE_BASE = "http://ds-macbook-pro-2:8765";
+const STORED = typeof window !== "undefined" ? localStorage.getItem("reed.backend") : null;
+const ORIGIN = STORED || (isNative ? DEFAULT_NATIVE_BASE : "");
+const BASE = ORIGIN + "/api";
 
 async function j<T>(path: string, opts?: RequestInit): Promise<T> {
   const r = await fetch(BASE + path, {
