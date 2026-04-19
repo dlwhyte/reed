@@ -50,3 +50,11 @@ body {
   background-color: #f4ecd8 !important;
   color: #5b4636 !important;
 }
+
+.scrollbar-none {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}

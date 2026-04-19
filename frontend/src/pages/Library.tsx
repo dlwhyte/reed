@@ -57,10 +57,10 @@ export default function Library() {
   }
 
   return (
-    <div className="max-w-5xl mx-auto px-4 py-6">
+    <div className="max-w-5xl mx-auto px-4 py-4 sm:py-6">
       <SaveBar onSaved={load} />
 
-      <div className="flex flex-wrap items-center gap-2 mt-6 mb-4">
+      <div className="flex items-center gap-2 mt-4 sm:mt-6 mb-3 overflow-x-auto -mx-4 px-4 scrollbar-none">
         {(["unread", "favorites", "archived", "all"] as Tab[]).map((t) => (
           <button
             key={t}
@@ -69,10 +69,10 @@ export default function Library() {
               setActiveTag(null);
               setQ("");
             }}
-            className={`px-3 py-1.5 rounded-lg text-sm capitalize ${
+            className={`px-3 py-1.5 rounded-full text-sm capitalize shrink-0 ${
               tab === t
                 ? "bg-neutral-900 dark:bg-neutral-100 text-white dark:text-neutral-900"
-                : "hover:bg-neutral-100 dark:hover:bg-neutral-800"
+                : "bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400"
             }`}
           >
             {t}
@@ -81,7 +81,7 @@ export default function Library() {
         <select
           value={sort}
           onChange={(e) => setSort(e.target.value as any)}
-          className="ml-auto text-sm px-2 py-1.5 rounded-lg border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-900"
+          className="ml-auto text-sm px-2 py-1.5 rounded-lg border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-900 shrink-0"
         >
           <option value="newest">Newest</option>
           <option value="oldest">Oldest</option>
@@ -90,7 +90,7 @@ export default function Library() {
         </select>
       </div>
 
-      <div className="flex gap-2 mb-4">
+      <div className="flex gap-2 mb-3">
         <div className="flex-1 relative">
           <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" />
           <input
@@ -111,24 +111,24 @@ export default function Library() {
           <button
             onClick={() => setSearchMode((m) => (m === "keyword" ? "semantic" : "keyword"))}
             title={searchMode === "semantic" ? "Semantic search" : "Keyword search"}
-            className={`px-3 rounded-lg border text-sm flex items-center gap-1 ${
+            className={`px-3 rounded-lg border text-sm flex items-center gap-1 shrink-0 ${
               searchMode === "semantic"
                 ? "bg-neutral-900 dark:bg-neutral-100 text-white dark:text-neutral-900 border-transparent"
                 : "border-neutral-300 dark:border-neutral-700"
             }`}
           >
             <Sparkles className="w-4 h-4" />
-            {searchMode === "semantic" ? "Semantic" : "Keyword"}
+            <span className="hidden sm:inline">{searchMode === "semantic" ? "Semantic" : "Keyword"}</span>
           </button>
         )}
       </div>
 
       {tags.length > 0 && (
-        <div className="flex flex-wrap gap-1 mb-6">
+        <div className="flex gap-1 mb-4 sm:mb-6 overflow-x-auto -mx-4 px-4 scrollbar-none">
           {activeTag && (
             <button
               onClick={() => setActiveTag(null)}
-              className="text-xs px-2 py-1 rounded-full bg-neutral-900 dark:bg-neutral-100 text-white dark:text-neutral-900"
+              className="shrink-0 text-xs px-2 py-1 rounded-full bg-neutral-900 dark:bg-neutral-100 text-white dark:text-neutral-900"
             >
               × {activeTag}
             </button>
@@ -138,7 +138,7 @@ export default function Library() {
               <button
                 key={t.tag}
                 onClick={() => setActiveTag(t.tag)}
-                className="text-xs px-2 py-1 rounded-full bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400 hover:bg-neutral-200 dark:hover:bg-neutral-700"
+                className="shrink-0 text-xs px-2 py-1 rounded-full bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400 hover:bg-neutral-200 dark:hover:bg-neutral-700"
               >
                 {t.tag} <span className="opacity-60">· {t.count}</span>
               </button>
@@ -153,7 +153,7 @@ export default function Library() {
           {q ? "No matches" : "Nothing here yet — paste a URL above to save your first article."}
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
           {articles.map((a) => (
             <ArticleCard key={a.id} article={a} onChange={load} />
           ))}

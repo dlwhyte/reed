@@ -6,7 +6,7 @@ import ResearchPanel from "../components/ResearchPanel";
 import { useStore } from "../store";
 import {
   ArrowLeft, Star, Archive, ArchiveRestore, ExternalLink,
-  Type, Minus, Plus, MessageSquare, Sun, Moon, Coffee, FlaskConical, X,
+  Type, Minus, Plus, MessageSquare, Sun, Moon, Coffee, FlaskConical, X, MoreHorizontal,
 } from "lucide-react";
 
 export default function Reader() {
@@ -16,6 +16,7 @@ export default function Reader() {
   const [panel, setPanel] = useState<"none" | "chat" | "research">("none");
   const [llmReady, setLlmReady] = useState(false);
   const [webReady, setWebReady] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
   const { prefs, setPrefs } = useStore();
 
   async function refresh() {
@@ -58,59 +59,8 @@ export default function Reader() {
           <div className="flex-1 truncate text-sm text-neutral-500">
             {article.site_name}
           </div>
-          <div className="flex items-center gap-1">
-            <button
-              onClick={() => setPrefs({ theme: prefs.theme === "light" ? "dark" : prefs.theme === "dark" ? "sepia" : "light" })}
-              className="p-2 rounded hover:bg-neutral-100 dark:hover:bg-neutral-800"
-              title="Theme"
-            >
-              {prefs.theme === "light" ? <Sun className="w-5 h-5" /> : prefs.theme === "dark" ? <Moon className="w-5 h-5" /> : <Coffee className="w-5 h-5" />}
-            </button>
-            <button
-              onClick={() => setPrefs({ font: prefs.font === "serif" ? "sans" : "serif" })}
-              className="hidden sm:block p-2 rounded hover:bg-neutral-100 dark:hover:bg-neutral-800"
-              title="Font"
-            >
-              <Type className="w-5 h-5" />
-            </button>
-            <button
-              onClick={() => setPrefs({ fontSize: Math.max(14, prefs.fontSize - 1) })}
-              className="hidden sm:block p-2 rounded hover:bg-neutral-100 dark:hover:bg-neutral-800"
-            >
-              <Minus className="w-5 h-5" />
-            </button>
-            <button
-              onClick={() => setPrefs({ fontSize: Math.min(24, prefs.fontSize + 1) })}
-              className="hidden sm:block p-2 rounded hover:bg-neutral-100 dark:hover:bg-neutral-800"
-            >
-              <Plus className="w-5 h-5" />
-            </button>
-            <button
-              onClick={async () => {
-                await api.update(article.id, { is_favorite: !article.is_favorite });
-                refresh();
-              }}
-              className="p-2 rounded hover:bg-neutral-100 dark:hover:bg-neutral-800"
-            >
-              <Star className={`w-5 h-5 ${article.is_favorite ? "fill-yellow-500 text-yellow-500" : ""}`} />
-            </button>
-            <button
-              onClick={async () => {
-                await api.update(article.id, { is_archived: !article.is_archived });
-                refresh();
-              }}
-              className="p-2 rounded hover:bg-neutral-100 dark:hover:bg-neutral-800"
-            >
-              {article.is_archived ? <ArchiveRestore className="w-5 h-5" /> : <Archive className="w-5 h-5" />}
-            </button>
-            <a
-              href={article.url}
-              target="_blank"
-              rel="noreferrer"
-              className="p-2 rounded hover:bg-neutral-100 dark:hover:bg-neutral-800"
-            >
-              <ExternalLink className="w-5 h-5" />
-            </a>
+          <div className="flex items-center gap-1 relative">
+            {/* Primary actions (always visible) */}
             {llmReady && (
               <>
                 <button
@@ -127,6 +77,145 @@ export default function Reader() {
                 >
                   <FlaskConical className="w-5 h-5" />
                 </button>
+              </>
+            )}
+
+            {/* Secondary actions: visible on desktop, hidden behind More on mobile */}
+            <div className="hidden sm:flex items-center gap-1">
+              <button
+                onClick={() => setPrefs({ theme: prefs.theme === "light" ? "dark" : prefs.theme === "dark" ? "sepia" : "light" })}
+                className="p-2 rounded hover:bg-neutral-100 dark:hover:bg-neutral-800"
+                title="Theme"
+              >
+                {prefs.theme === "light" ? <Sun className="w-5 h-5" /> : prefs.theme === "dark" ? <Moon className="w-5 h-5" /> : <Coffee className="w-5 h-5" />}
+              </button>
+              <button
+                onClick={() => setPrefs({ font: prefs.font === "serif" ? "sans" : "serif" })}
+                className="p-2 rounded hover:bg-neutral-100 dark:hover:bg-neutral-800"
+                title="Font"
+              >
+                <Type className="w-5 h-5" />
+              </button>
+              <button
+                onClick={() => setPrefs({ fontSize: Math.max(14, prefs.fontSize - 1) })}
+                className="p-2 rounded hover:bg-neutral-100 dark:hover:bg-neutral-800"
+              >
+                <Minus className="w-5 h-5" />
+              </button>
+              <button
+                onClick={() => setPrefs({ fontSize: Math.min(24, prefs.fontSize + 1) })}
+                className="p-2 rounded hover:bg-neutral-100 dark:hover:bg-neutral-800"
+              >
+                <Plus className="w-5 h-5" />
+              </button>
+              <button
+                onClick={async () => {
+                  await api.update(article.id, { is_favorite: !article.is_favorite });
+                  refresh();
+                }}
+                className="p-2 rounded hover:bg-neutral-100 dark:hover:bg-neutral-800"
+              >
+                <Star className={`w-5 h-5 ${article.is_favorite ? "fill-yellow-500 text-yellow-500" : ""}`} />
+              </button>
+              <button
+                onClick={async () => {
+                  await api.update(article.id, { is_archived: !article.is_archived });
+                  refresh();
+                }}
+                className="p-2 rounded hover:bg-neutral-100 dark:hover:bg-neutral-800"
+              >
+                {article.is_archived ? <ArchiveRestore className="w-5 h-5" /> : <Archive className="w-5 h-5" />}
+              </button>
+              <a
+                href={article.url}
+                target="_blank"
+                rel="noreferrer"
+                className="p-2 rounded hover:bg-neutral-100 dark:hover:bg-neutral-800"
+              >
+                <ExternalLink className="w-5 h-5" />
+              </a>
+            </div>
+
+            {/* Mobile: More menu */}
+            <button
+              onClick={() => setMoreOpen((v) => !v)}
+              className={`sm:hidden p-2 rounded ${moreOpen ? "bg-neutral-200 dark:bg-neutral-800" : "hover:bg-neutral-100 dark:hover:bg-neutral-800"}`}
+              title="More"
+            >
+              <MoreHorizontal className="w-5 h-5" />
+            </button>
+            {moreOpen && (
+              <>
+                <div
+                  className="sm:hidden fixed inset-0 z-10"
+                  onClick={() => setMoreOpen(false)}
+                />
+                <div className="sm:hidden absolute top-full right-0 mt-1 w-56 rounded-lg border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-950 shadow-lg z-20 py-1">
+                  <button
+                    onClick={() => {
+                      setPrefs({ theme: prefs.theme === "light" ? "dark" : prefs.theme === "dark" ? "sepia" : "light" });
+                    }}
+                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-neutral-100 dark:hover:bg-neutral-900"
+                  >
+                    {prefs.theme === "light" ? <Sun className="w-4 h-4" /> : prefs.theme === "dark" ? <Moon className="w-4 h-4" /> : <Coffee className="w-4 h-4" />}
+                    Theme: {prefs.theme}
+                  </button>
+                  <button
+                    onClick={() => setPrefs({ font: prefs.font === "serif" ? "sans" : "serif" })}
+                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-neutral-100 dark:hover:bg-neutral-900"
+                  >
+                    <Type className="w-4 h-4" />
+                    Font: {prefs.font}
+                  </button>
+                  <div className="flex items-center gap-2 px-4 py-2.5">
+                    <span className="text-sm flex-1">Size: {prefs.fontSize}px</span>
+                    <button
+                      onClick={() => setPrefs({ fontSize: Math.max(14, prefs.fontSize - 1) })}
+                      className="p-1 rounded hover:bg-neutral-100 dark:hover:bg-neutral-900"
+                    >
+                      <Minus className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => setPrefs({ fontSize: Math.min(24, prefs.fontSize + 1) })}
+                      className="p-1 rounded hover:bg-neutral-100 dark:hover:bg-neutral-900"
+                    >
+                      <Plus className="w-4 h-4" />
+                    </button>
+                  </div>
+                  <div className="border-t border-neutral-200 dark:border-neutral-800 my-1" />
+                  <button
+                    onClick={async () => {
+                      await api.update(article.id, { is_favorite: !article.is_favorite });
+                      refresh();
+                      setMoreOpen(false);
+                    }}
+                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-neutral-100 dark:hover:bg-neutral-900"
+                  >
+                    <Star className={`w-4 h-4 ${article.is_favorite ? "fill-yellow-500 text-yellow-500" : ""}`} />
+                    {article.is_favorite ? "Unfavorite" : "Favorite"}
+                  </button>
+                  <button
+                    onClick={async () => {
+                      await api.update(article.id, { is_archived: !article.is_archived });
+                      refresh();
+                      setMoreOpen(false);
+                    }}
+                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-neutral-100 dark:hover:bg-neutral-900"
+                  >
+                    {article.is_archived ? <ArchiveRestore className="w-4 h-4" /> : <Archive className="w-4 h-4" />}
+                    {article.is_archived ? "Unarchive" : "Archive"}
+                  </button>
+                  <a
+                    href={article.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    onClick={() => setMoreOpen(false)}
+                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-neutral-100 dark:hover:bg-neutral-900"
+                  >
+                    <ExternalLink className="w-4 h-4" />
+                    Open original
+                  </a>
+                </div>
               </>
             )}
           </div>
