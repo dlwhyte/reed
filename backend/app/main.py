@@ -449,10 +449,21 @@ if FRONTEND_DIST.exists():
         name="assets",
     )
 
+    FRONTEND_DIST_RESOLVED = FRONTEND_DIST.resolve()
+
     @app.get("/{full_path:path}", include_in_schema=False)
     async def spa(full_path: str):
         # Never shadow API / bookmarklet routes (FastAPI registers in order,
         # but belt-and-suspenders: reject anything api-looking here too).
         if full_path.startswith(("api/", "save", "share")):
             raise HTTPException(404)
+        # Serve real files at the dist root (manifest.webmanifest,
+        # apple-touch-icon.png, favicon.svg) before falling back to the SPA shell.
+        if full_path:
+            candidate = (FRONTEND_DIST / full_path).resolve()
+            if (
+                candidate.is_file()
+                and candidate.is_relative_to(FRONTEND_DIST_RESOLVED)
+            ):
+                return FileResponse(candidate)
         return FileResponse(FRONTEND_DIST / "index.html")
