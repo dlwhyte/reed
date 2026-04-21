@@ -1,47 +1,27 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
+import { ArrowLeft, Check, Copy } from "lucide-react";
+import { clsx } from "clsx";
 import { api } from "../lib/api";
 import { useStore } from "../store";
-import { ChevronRight } from "lucide-react";
+import { Wordmark } from "../components/primitives/Wordmark";
+import { Icon } from "../components/primitives/Icon";
+import { IconButton } from "../components/primitives/IconButton";
+import { PocketImport } from "../components/PocketImport";
 
-function Section({
-  title,
-  children,
-  defaultOpen = false,
-}: {
-  title: string;
-  children: React.ReactNode;
-  defaultOpen?: boolean;
-}) {
-  return (
-    <details
-      className="border-b border-neutral-200 dark:border-neutral-800 group"
-      open={defaultOpen}
-    >
-      <summary className="cursor-pointer py-4 flex items-center gap-2 list-none select-none">
-        <ChevronRight className="w-4 h-4 transition-transform group-open:rotate-90 text-neutral-400" />
-        <span className="font-semibold">{title}</span>
-      </summary>
-      <div className="pb-6 pl-6">{children}</div>
-    </details>
-  );
-}
+type TabId = "reader" | "save" | "status";
+
+const TABS: { id: TabId; label: string }[] = [
+  { id: "reader", label: "Reader" },
+  { id: "save", label: "Save from anywhere" },
+  { id: "status", label: "Backend · models" },
+];
 
 export default function Settings() {
   const { prefs, setPrefs } = useStore();
+  const [tab, setTab] = useState<TabId>("reader");
   const [cfg, setCfg] = useState<any>(null);
   const [health, setHealth] = useState<any>(null);
-  const origin = typeof window !== "undefined" ? window.location.origin : "";
-  const saveUrl = `${origin}/api/save`;
-  const bookmarklet = `javascript:(()=>{window.open('${origin}/save?url='+encodeURIComponent(location.href),'reader_save','width=420,height=220,top=100,left=100')})();`;
-  const [copiedField, setCopiedField] = useState<string | null>(null);
-
-  const copy = async (text: string, field: string) => {
-    try {
-      await navigator.clipboard.writeText(text);
-      setCopiedField(field);
-      setTimeout(() => setCopiedField(null), 1500);
-    } catch {}
-  };
 
   useEffect(() => {
     api.config().then(setCfg).catch(() => {});
@@ -49,122 +29,392 @@ export default function Settings() {
   }, []);
 
   return (
-    <div className="max-w-2xl mx-auto px-4 py-4 sm:py-6">
-      <h1 className="text-2xl font-bold mb-2">Settings</h1>
-
-      <Section title="Reader preferences" defaultOpen>
-        <div className="space-y-3 text-sm">
-          <div className="flex items-center justify-between">
-            <span>Theme</span>
-            <select
-              value={prefs.theme}
-              onChange={(e) => setPrefs({ theme: e.target.value as any })}
-              className="px-2 py-1 rounded border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-900"
-            >
-              <option value="light">Light</option>
-              <option value="dark">Dark</option>
-              <option value="sepia">Sepia</option>
-            </select>
-          </div>
-          <div className="flex items-center justify-between">
-            <span>Font</span>
-            <select
-              value={prefs.font}
-              onChange={(e) => setPrefs({ font: e.target.value as any })}
-              className="px-2 py-1 rounded border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-900"
-            >
-              <option value="serif">Serif</option>
-              <option value="sans">Sans-serif</option>
-            </select>
-          </div>
-          <div className="flex items-center justify-between gap-3">
-            <span className="shrink-0">Font size: {prefs.fontSize}px</span>
-            <input
-              type="range"
-              min={14}
-              max={24}
-              value={prefs.fontSize}
-              onChange={(e) => setPrefs({ fontSize: Number(e.target.value) })}
-              className="flex-1 min-w-0"
-            />
-          </div>
-          <div className="flex items-center justify-between gap-3">
-            <span className="shrink-0">Width: {prefs.width}px</span>
-            <input
-              type="range"
-              min={520}
-              max={880}
-              step={20}
-              value={prefs.width}
-              onChange={(e) => setPrefs({ width: Number(e.target.value) })}
-              className="flex-1 min-w-0"
-            />
-          </div>
+    <div className="min-h-screen bg-paper paper-noise text-ink">
+      <header className="sticky top-0 z-20 border-b border-rule bg-paper/80 backdrop-blur pt-safe">
+        <div className="mx-auto flex h-16 max-w-3xl items-center gap-3 px-5 md:px-8">
+          <Link to="/" aria-label="Back to library">
+            <IconButton icon={ArrowLeft} label="Back to library" />
+          </Link>
+          <Wordmark size="md" />
+          <span className="hidden truncate font-mono text-[10px] uppercase tracking-[0.14em] text-ink-faint sm:inline">
+            settings
+          </span>
         </div>
-      </Section>
+      </header>
 
-      <Section title="Save from iPhone">
-        <p className="text-sm text-neutral-500 mb-4">
-          One-time iOS Shortcut setup so "Save to reed" appears in the Share Sheet.
+      <div className="mx-auto max-w-3xl px-5 pb-24 pt-8 md:px-8">
+        <h1 className="font-display text-[32px] font-semibold leading-tight tracking-[-0.02em] text-ink [text-wrap:balance]">
+          Tune the shelf to your taste
+        </h1>
+        <p className="mt-2 font-display text-[15px] italic text-ink-muted">
+          Reader defaults, save shortcuts, and what’s wired up in the backend.
         </p>
 
-        <div className="rounded-lg border border-neutral-200 dark:border-neutral-800 p-3 mb-3 flex items-center justify-between gap-3">
+        <nav className="mt-6 flex gap-1.5 border-b border-dashed border-rule">
+          {TABS.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => setTab(t.id)}
+              className={clsx(
+                "-mb-px rounded-t-md border-b-2 px-3 py-2 font-sans text-[13px] font-medium transition-colors duration-150",
+                tab === t.id
+                  ? "border-terracotta text-ink"
+                  : "border-transparent text-ink-muted hover:text-ink",
+              )}
+            >
+              {t.label}
+            </button>
+          ))}
+        </nav>
+
+        <div className="mt-7">
+          {tab === "reader" && <ReaderPrefs prefs={prefs} setPrefs={setPrefs} />}
+          {tab === "save" && <SavePrefs />}
+          {tab === "status" && <StatusPanel cfg={cfg} health={health} />}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Card({
+  title,
+  hint,
+  children,
+}: {
+  title: string;
+  hint?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="rounded-xl border border-rule bg-paper-raised p-5 md:p-6">
+      <div className="mb-1 font-mono text-[10px] uppercase tracking-[0.12em] text-terracotta">
+        {title}
+      </div>
+      {hint && (
+        <p className="mb-4 font-display text-[14px] italic text-ink-muted">
+          {hint}
+        </p>
+      )}
+      <div className="mt-4 space-y-4">{children}</div>
+    </section>
+  );
+}
+
+function RowLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <span className="font-sans text-[13px] text-ink-muted">{children}</span>
+  );
+}
+
+type Prefs = {
+  theme: "light" | "dark" | "sepia";
+  font: "serif" | "sans";
+  fontSize: number;
+  width: number;
+};
+
+function ReaderPrefs({
+  prefs,
+  setPrefs,
+}: {
+  prefs: Prefs;
+  setPrefs: (p: Partial<Prefs>) => void;
+}) {
+  const themes: { id: "light" | "sepia" | "dark"; label: string; preview: string }[] = [
+    { id: "light", label: "Paper", preview: "#F8F1E4" },
+    { id: "sepia", label: "Sepia", preview: "#EFE3CA" },
+    { id: "dark", label: "Dusk", preview: "#171310" },
+  ];
+  const fonts: { id: "serif" | "sans"; label: string; sample: string; className: string }[] = [
+    { id: "serif", label: "Serif", sample: "Aa — bookish", className: "font-display" },
+    { id: "sans", label: "Sans", sample: "Aa — crisp", className: "font-sans" },
+  ];
+
+  return (
+    <div className="space-y-5">
+      <Card title="Theme" hint="Only the reader changes. The shelf stays warm paper.">
+        <div className="grid grid-cols-3 gap-2.5">
+          {themes.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => setPrefs({ theme: t.id })}
+              className={clsx(
+                "flex flex-col items-start gap-2 rounded-lg border p-3 text-left transition-colors duration-150",
+                prefs.theme === t.id
+                  ? "border-ink"
+                  : "border-rule hover:border-ink-muted",
+              )}
+            >
+              <span
+                className="h-10 w-full rounded-md border border-rule"
+                style={{ background: t.preview }}
+              />
+              <span className="font-sans text-[13px] font-medium text-ink">
+                {t.label}
+              </span>
+            </button>
+          ))}
+        </div>
+      </Card>
+
+      <Card title="Font" hint="Body font for the article view.">
+        <div className="grid grid-cols-2 gap-2.5">
+          {fonts.map((f) => (
+            <button
+              key={f.id}
+              type="button"
+              onClick={() => setPrefs({ font: f.id })}
+              className={clsx(
+                "flex items-center justify-between rounded-lg border px-4 py-3 text-left transition-colors duration-150",
+                prefs.font === f.id
+                  ? "border-ink"
+                  : "border-rule hover:border-ink-muted",
+              )}
+            >
+              <span className="font-sans text-[13px] font-medium text-ink">
+                {f.label}
+              </span>
+              <span className={clsx("text-[18px] text-ink-muted", f.className)}>
+                {f.sample}
+              </span>
+            </button>
+          ))}
+        </div>
+      </Card>
+
+      <Card title="Size" hint="14–24 px. Shortcuts — and + work in the reader.">
+        <div className="flex items-center gap-4">
+          <RowLabel>Size</RowLabel>
+          <span className="w-12 font-mono text-[12px] text-ink">
+            {prefs.fontSize}px
+          </span>
+          <input
+            type="range"
+            min={14}
+            max={24}
+            value={prefs.fontSize}
+            onChange={(e) => setPrefs({ fontSize: Number(e.target.value) })}
+            className="flex-1 accent-terracotta"
+          />
+        </div>
+        <div className="flex items-center gap-4">
+          <RowLabel>Column width</RowLabel>
+          <span className="w-12 font-mono text-[12px] text-ink">
+            {prefs.width}px
+          </span>
+          <input
+            type="range"
+            min={520}
+            max={880}
+            step={20}
+            value={prefs.width}
+            onChange={(e) => setPrefs({ width: Number(e.target.value) })}
+            className="flex-1 accent-terracotta"
+          />
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+function SavePrefs() {
+  const origin = typeof window !== "undefined" ? window.location.origin : "";
+  const saveUrl = `${origin}/api/save`;
+  const bookmarklet = `javascript:(()=>{window.open('${origin}/save?url='+encodeURIComponent(location.href),'browsefellow_save','width=420,height=220,top=100,left=100')})();`;
+  const [copied, setCopied] = useState<string | null>(null);
+
+  async function copy(text: string, key: string) {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(key);
+      setTimeout(() => setCopied(null), 1400);
+    } catch {
+      /* noop */
+    }
+  }
+
+  return (
+    <div className="space-y-5">
+      <Card
+        title="iOS Share Sheet"
+        hint="One-time Shortcuts setup so “Save to BrowseFellow” appears in the Share Sheet on your iPhone."
+      >
+        <div className="flex items-center justify-between gap-3 rounded-lg border border-dashed border-rule bg-paper px-3 py-2.5">
           <div className="min-w-0">
-            <div className="text-[11px] uppercase tracking-wide text-neutral-500 mb-1">Save endpoint</div>
-            <code className="text-xs break-all">{saveUrl}</code>
+            <div className="mb-0.5 font-mono text-[10px] uppercase tracking-[0.12em] text-ink-faint">
+              Save endpoint
+            </div>
+            <code className="break-all font-mono text-[12px] text-ink">
+              {saveUrl}
+            </code>
           </div>
           <button
+            type="button"
             onClick={() => copy(saveUrl, "save")}
-            className="px-3 py-1.5 rounded border border-neutral-300 dark:border-neutral-700 text-xs whitespace-nowrap shrink-0"
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-rule bg-paper-raised px-3 py-1.5 font-sans text-[12px] font-medium text-ink-muted hover:text-ink"
           >
-            {copiedField === "save" ? "✓ Copied" : "Copy"}
+            {copied === "save" ? (
+              <>
+                <Icon icon={Check} size={12} /> Copied
+              </>
+            ) : (
+              <>
+                <Icon icon={Copy} size={12} /> Copy
+              </>
+            )}
           </button>
         </div>
 
-        <ol className="text-sm space-y-2 list-decimal ml-5">
-          <li>Open the <strong>Shortcuts</strong> app on your iPhone.</li>
-          <li>Tap <strong>+</strong>, then <strong>Add Action</strong>.</li>
-          <li>Search and add <strong>"Get Contents of URL"</strong>.</li>
+        <ol className="list-decimal space-y-1.5 pl-5 font-sans text-[13px] leading-[1.7] text-ink-muted">
+          <li>
+            Open the <strong className="text-ink">Shortcuts</strong> app on your
+            iPhone.
+          </li>
+          <li>
+            Tap <strong className="text-ink">+</strong>, then{" "}
+            <strong className="text-ink">Add Action</strong>.
+          </li>
+          <li>
+            Search and add{" "}
+            <strong className="text-ink">Get Contents of URL</strong>.
+          </li>
           <li>Paste the save endpoint into the URL field.</li>
-          <li>Tap <strong>Show More</strong>. Set <strong>Method</strong> → POST, <strong>Request Body</strong> → JSON. Add a field: Key <code>url</code>, value = <strong>Shortcut Input</strong>.</li>
-          <li>Tap <strong>ⓘ</strong> → enable <strong>"Use with Share Sheet"</strong> → check only <strong>URLs</strong>.</li>
-          <li>Rename to <strong>"Save to reed"</strong>. Done.</li>
+          <li>
+            Tap <strong className="text-ink">Show More</strong>. Set Method →
+            POST, Request Body → JSON. Add a field: key{" "}
+            <code className="font-mono">url</code>, value ={" "}
+            <strong className="text-ink">Shortcut Input</strong>.
+          </li>
+          <li>
+            Tap <strong className="text-ink">ⓘ</strong> → enable{" "}
+            <strong className="text-ink">Use with Share Sheet</strong> → check
+            only <strong className="text-ink">URLs</strong>.
+          </li>
+          <li>
+            Rename to{" "}
+            <strong className="text-ink">Save to BrowseFellow</strong>.
+          </li>
         </ol>
+      </Card>
 
-        <div className="text-xs text-neutral-500 mt-4 pt-3 border-t border-neutral-200 dark:border-neutral-800">
-          <strong>Using it:</strong> any app → Share → "Save to reed"
-        </div>
-      </Section>
-
-      <Section title="Bookmarklet (desktop)">
-        <p className="text-sm text-neutral-500 mb-3">
-          Drag this button to your browser's bookmarks bar. Click on any page to save to reed.
-        </p>
+      <Card
+        title="Desktop bookmarklet"
+        hint="Drag this to your browser’s bookmarks bar. Click on any page to save."
+      >
         <a
           href={bookmarklet}
           onClick={(e) => e.preventDefault()}
-          className="inline-block px-4 py-2 rounded-lg bg-neutral-900 dark:bg-neutral-100 text-white dark:text-neutral-900 font-medium"
+          className="inline-flex items-center gap-2 rounded-pill bg-terracotta px-4 py-2 font-sans text-[13px] font-medium text-white shadow-pill hover:brightness-105"
         >
-          📖 Save to reed
+          Save to BrowseFellow
         </a>
-      </Section>
+      </Card>
 
-      <Section title="Status">
-        <dl className="text-sm grid grid-cols-[auto_1fr] gap-x-4 gap-y-2">
-          <dt className="text-neutral-500">Backend</dt>
-          <dd>{health?.ok ? "✓ connected" : "not reachable"}</dd>
-          <dt className="text-neutral-500">LLM features</dt>
-          <dd>{cfg?.llm_ready ? "✓ enabled" : "disabled (set COHERE_API_KEY in .env)"}</dd>
-          <dt className="text-neutral-500">Web search</dt>
-          <dd>{cfg?.web_search_ready ? "✓ enabled (Tavily)" : "disabled"}</dd>
-          <dt className="text-neutral-500">Chat model</dt>
-          <dd className="break-all">{cfg?.chat_model || "—"}</dd>
-          <dt className="text-neutral-500">Embed model</dt>
-          <dd className="break-all">{cfg?.embed_model || "—"}</dd>
-          <dt className="text-neutral-500">Port</dt>
-          <dd>{cfg?.port || "—"}</dd>
-        </dl>
-      </Section>
+      <Card
+        title="Import from Pocket"
+        hint="Bring your old shelf over. I’ll keep tags and mirror archived state."
+      >
+        <PocketImport />
+      </Card>
     </div>
+  );
+}
+
+function StatusPanel({ cfg, health }: { cfg: any; health: any }) {
+  const rows: { label: string; value: React.ReactNode }[] = [
+    {
+      label: "Backend",
+      value: <StatusPill ok={!!health?.ok} okLabel="connected" offLabel="not reachable" />,
+    },
+    {
+      label: "LLM features",
+      value: (
+        <StatusPill
+          ok={!!cfg?.llm_ready}
+          okLabel="enabled"
+          offLabel="disabled — set COHERE_API_KEY"
+        />
+      ),
+    },
+    {
+      label: "Web search",
+      value: (
+        <StatusPill
+          ok={!!cfg?.web_search_ready}
+          okLabel="Tavily enabled"
+          offLabel="shelf-only"
+        />
+      ),
+    },
+    {
+      label: "Chat model",
+      value: (
+        <span className="font-mono text-[12px] text-ink">
+          {cfg?.chat_model || "—"}
+        </span>
+      ),
+    },
+    {
+      label: "Embed model",
+      value: (
+        <span className="font-mono text-[12px] text-ink">
+          {cfg?.embed_model || "—"}
+        </span>
+      ),
+    },
+    {
+      label: "Port",
+      value: (
+        <span className="font-mono text-[12px] text-ink">{cfg?.port || "—"}</span>
+      ),
+    },
+  ];
+
+  return (
+    <Card title="Runtime" hint="Live values from /api/config and /api/health.">
+      <dl className="grid grid-cols-[auto_1fr] gap-x-6 gap-y-3">
+        {rows.map((r) => (
+          <div
+            key={r.label}
+            className="col-span-2 grid grid-cols-subgrid items-center border-b border-dashed border-rule pb-2.5 last:border-none last:pb-0"
+          >
+            <dt className="font-sans text-[13px] text-ink-muted">{r.label}</dt>
+            <dd className="font-sans text-[13px] text-ink">{r.value}</dd>
+          </div>
+        ))}
+      </dl>
+    </Card>
+  );
+}
+
+function StatusPill({
+  ok,
+  okLabel,
+  offLabel,
+}: {
+  ok: boolean;
+  okLabel: string;
+  offLabel: string;
+}) {
+  return (
+    <span
+      className={clsx(
+        "inline-flex items-center gap-1.5 rounded-pill px-2.5 py-0.5 font-mono text-[10px] uppercase tracking-[0.12em]",
+        ok
+          ? "bg-olive-soft text-olive"
+          : "bg-terracotta-soft text-terracotta",
+      )}
+    >
+      <span
+        className={clsx(
+          "inline-block h-1.5 w-1.5 rounded-full",
+          ok ? "bg-olive" : "bg-terracotta",
+        )}
+      />
+      {ok ? okLabel : offLabel}
+    </span>
   );
 }

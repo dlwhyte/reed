@@ -44,6 +44,20 @@ async function j<T>(path: string, opts?: RequestInit): Promise<T> {
   return r.json();
 }
 
+export type Highlight = {
+  id: number;
+  article_id: number;
+  text: string;
+  note: string | null;
+  created_at: string;
+};
+
+export type HighlightWithArticle = Highlight & {
+  article_title: string;
+  article_site: string | null;
+  article_url: string;
+};
+
 export const api = {
   health: () => j<{ ok: boolean; llm: boolean }>("/health"),
   config: () => j<{ llm_ready: boolean; enable_llm: boolean; web_search_ready: boolean; chat_model: string; embed_model: string; port: number }>("/config"),
@@ -61,6 +75,16 @@ export const api = {
   semanticSearch: (q: string) => j<Article[]>(`/semantic-search?q=${encodeURIComponent(q)}`),
   similar: (id: number) => j<Article[]>(`/articles/${id}/similar`),
   tags: () => j<{ tag: string; count: number }[]>("/tags"),
+  articleHighlights: (id: number) =>
+    j<Highlight[]>(`/articles/${id}/highlights`),
+  allHighlights: () => j<HighlightWithArticle[]>(`/highlights`),
+  addHighlight: (id: number, text: string, note?: string | null) =>
+    j<Highlight>(`/articles/${id}/highlights`, {
+      method: "POST",
+      body: JSON.stringify({ text, note: note ?? null }),
+    }),
+  removeHighlight: (highlightId: number) =>
+    j<{ ok: boolean }>(`/highlights/${highlightId}`, { method: "DELETE" }),
 };
 
 export async function* chatStream(

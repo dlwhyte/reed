@@ -1,11 +1,11 @@
 {
-  "name": "reed",
-  "short_name": "reed",
-  "description": "A personal read-it-later app",
+  "name": "BrowseFellow",
+  "short_name": "BrowseFellow",
+  "description": "A warm, editorial read-it-later shelf with a research companion.",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#fafafa",
-  "theme_color": "#0a0a0a",
+  "background_color": "#F8F1E4",
+  "theme_color": "#F8F1E4",
   "orientation": "portrait",
   "icons": [
     {

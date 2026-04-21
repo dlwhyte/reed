@@ -1,10 +1,23 @@
-import { useState, useRef, useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import { chatStream } from "../lib/api";
-import { Send, Sparkles, Loader2 } from "lucide-react";
+import { Composer } from "./panels/Composer";
+import { TypingDots } from "./primitives/TypingDots";
 
 type Msg = { role: "user" | "assistant"; content: string };
 
-export default function ChatPanel({ articleId, llmReady }: { articleId: number; llmReady: boolean }) {
+const SUGGESTIONS = [
+  "Summarize this in five bullets.",
+  "What’s the sharpest counter-argument?",
+  "Walk me through the main idea plainly.",
+];
+
+export default function ChatPanel({
+  articleId,
+  llmReady,
+}: {
+  articleId: number;
+  llmReady: boolean;
+}) {
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
@@ -19,7 +32,11 @@ export default function ChatPanel({ articleId, llmReady }: { articleId: number; 
     if (!q || busy) return;
     setInput("");
     const history = messages;
-    setMessages([...history, { role: "user", content: q }, { role: "assistant", content: "" }]);
+    setMessages([
+      ...history,
+      { role: "user", content: q },
+      { role: "assistant", content: "" },
+    ]);
     setBusy(true);
     try {
       let acc = "";
@@ -34,7 +51,10 @@ export default function ChatPanel({ articleId, llmReady }: { articleId: number; 
     } catch (e: any) {
       setMessages((m) => {
         const copy = [...m];
-        copy[copy.length - 1] = { role: "assistant", content: `Error: ${e.message}` };
+        copy[copy.length - 1] = {
+          role: "assistant",
+          content: `Something went wrong: ${e.message}`,
+        };
         return copy;
       });
     } finally {
@@ -44,54 +64,112 @@ export default function ChatPanel({ articleId, llmReady }: { articleId: number; 
 
   if (!llmReady) {
     return (
-      <div className="text-sm text-neutral-500 p-4 text-center">
-        Chat requires Cohere API key. Add to <code>.env</code> and restart.
+      <div className="flex h-full items-center justify-center p-6 text-center">
+        <div>
+          <div className="font-mono text-[10px] uppercase tracking-[0.15em] text-plum">
+            chat offline
+          </div>
+          <div className="mt-2 font-display text-[15px] italic text-ink-muted">
+            Add <span className="font-mono not-italic">COHERE_API_KEY</span> to
+            <br />
+            <span className="font-mono not-italic">.env</span> and restart.
+          </div>
+        </div>
       </div>
     );
   }
 
+  const showSuggestions = messages.length === 0;
+  const waitingFirstToken =
+    busy &&
+    messages.length > 0 &&
+    messages[messages.length - 1].role === "assistant" &&
+    messages[messages.length - 1].content === "";
+
   return (
-    <div className="flex flex-col h-full">
-      <div className="flex items-center gap-2 px-4 py-3 border-b border-neutral-200 dark:border-neutral-800">
-        <Sparkles className="w-4 h-4" />
-        <span className="font-medium text-sm">Chat with article</span>
-      </div>
-      <div className="flex-1 overflow-y-auto p-4 space-y-3">
-        {messages.length === 0 && (
-          <div className="text-sm text-neutral-500">
-            Ask anything about this article. Try: "summarize in bullet points" or "what's the main argument?"
+    <div className="flex h-full flex-col">
+      <div className="flex-1 space-y-4 overflow-y-auto px-4 py-5">
+        {showSuggestions && (
+          <div className="space-y-3">
+            <p className="font-display text-[14px] italic text-ink-muted">
+              Chat is scoped to this article — cite paragraph numbers if you want
+              me to point to specific bits.
+            </p>
+            <div className="flex flex-col gap-1.5">
+              {SUGGESTIONS.map((s) => (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => setInput(s)}
+                  className="w-full rounded-md border border-dashed border-rule px-3 py-2 text-left font-sans text-[13px] text-ink-muted transition-colors duration-150 hover:border-plum hover:text-ink"
+                >
+                  {s}
+                </button>
+              ))}
+            </div>
           </div>
         )}
+
         {messages.map((m, i) => (
-          <div
+          <ChatBubble
             key={i}
-            className={`text-sm whitespace-pre-wrap rounded-lg px-3 py-2 ${
-              m.role === "user"
-                ? "bg-neutral-900 dark:bg-neutral-100 text-white dark:text-neutral-900 ml-8"
-                : "bg-neutral-100 dark:bg-neutral-800 mr-8"
-            }`}
-          >
-            {m.content || (busy && i === messages.length - 1 ? "…" : "")}
-          </div>
+            role={m.role}
+            content={m.content}
+            streaming={
+              busy &&
+              i === messages.length - 1 &&
+              m.role === "assistant" &&
+              m.content.length > 0
+            }
+          />
         ))}
+
+        {waitingFirstToken && (
+          <div className="flex text-plum">
+            <span className="rounded-lg rounded-tl-sm bg-plum-soft px-3 py-2">
+              <TypingDots />
+            </span>
+          </div>
+        )}
+
         <div ref={endRef} />
       </div>
-      <div className="p-3 border-t border-neutral-200 dark:border-neutral-800 flex gap-2">
-        <input
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && send()}
-          placeholder="Ask about this article…"
-          disabled={busy}
-          className="flex-1 px-3 py-2 rounded-lg border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-900 text-sm focus:outline-none focus:ring-2 focus:ring-neutral-400"
-        />
-        <button
-          onClick={send}
-          disabled={busy || !input.trim()}
-          className="px-3 py-2 rounded-lg bg-neutral-900 dark:bg-neutral-100 text-white dark:text-neutral-900 disabled:opacity-50"
-        >
-          {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-        </button>
+
+      <Composer
+        value={input}
+        onChange={setInput}
+        onSubmit={send}
+        busy={busy}
+        placeholder="Ask about this piece…"
+        accent="plum"
+      />
+    </div>
+  );
+}
+
+function ChatBubble({
+  role,
+  content,
+  streaming,
+}: {
+  role: "user" | "assistant";
+  content: string;
+  streaming: boolean;
+}) {
+  if (role === "user") {
+    return (
+      <div className="flex justify-end">
+        <div className="max-w-[85%] rounded-lg rounded-br-sm bg-plum px-3 py-2 font-sans text-[14px] leading-[1.5] text-white whitespace-pre-wrap">
+          {content}
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div className="flex">
+      <div className="max-w-[90%] rounded-lg rounded-tl-sm bg-paper-raised border border-rule px-3 py-2 font-sans text-[14px] leading-[1.6] text-ink whitespace-pre-wrap">
+        {content}
+        {streaming && <span className="bf-caret text-plum" />}
       </div>
     </div>
   );

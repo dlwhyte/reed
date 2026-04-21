@@ -1,9 +1,53 @@
+@import url("https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,500;0,8..60,600;0,8..60,700;1,8..60,400;1,8..60,500&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap");
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 :root {
-  color-scheme: light dark;
+  color-scheme: light;
+
+  /* Paper + ink */
+  --bf-paper: #f8f1e4;
+  --bf-paper-deep: #f2e8d3;
+  --bf-paper-raised: #fdf8ec;
+  --bf-ink: #2b2320;
+  --bf-ink-muted: #7a6b5f;
+  --bf-ink-faint: #b3a594;
+  --bf-rule: #e3d6be;
+  --bf-butter: #f2d5b8;
+
+  /* Accents (oklch) */
+  --bf-terracotta: oklch(0.65 0.12 40);
+  --bf-terracotta-soft: oklch(0.9 0.05 40);
+  --bf-olive: oklch(0.55 0.08 130);
+  --bf-olive-soft: oklch(0.92 0.04 130);
+  --bf-plum: oklch(0.52 0.08 340);
+  --bf-plum-soft: oklch(0.93 0.04 340);
+
+  /* Paper grain tile, applied as a utility below */
+  --bf-paper-noise: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='240' height='240'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.65  0 0 0 0 0.56  0 0 0 0 0.42  0 0 0 0.05 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+}
+
+/* Reader-scoped palette overrides. Applied to the Reader shell via .reader-theme-{name}. */
+.reader-theme-sepia {
+  --bf-paper: #efe3ca;
+  --bf-paper-deep: #e7d7b4;
+  --bf-paper-raised: #f6ebd3;
+  --bf-ink: #3a2e22;
+  --bf-ink-muted: #7a6347;
+  --bf-ink-faint: #a89069;
+  --bf-rule: #d4c09a;
+}
+
+.reader-theme-dark {
+  --bf-paper: #171310;
+  --bf-paper-deep: #201a16;
+  --bf-paper-raised: #2a221c;
+  --bf-ink: #f0e6d5;
+  --bf-ink-muted: #a89989;
+  --bf-ink-faint: #6e6256;
+  --bf-rule: #3a2f26;
 }
 
 html,
@@ -13,48 +57,133 @@ body,
 }
 
 body {
-  @apply bg-neutral-50 text-neutral-900 antialiased;
+  @apply bg-paper text-ink antialiased font-sans;
+  font-feature-settings: "ss01", "cv11";
 }
 
-.dark body {
-  @apply bg-neutral-950 text-neutral-100;
+/* Subtle paper grain utility. Layered over surfaces that want the fiber feel. */
+@layer utilities {
+  .paper-noise {
+    background-image: var(--bf-paper-noise);
+    background-size: 240px 240px;
+    background-repeat: repeat;
+  }
+
+  .scrollbar-none {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  .scrollbar-none::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Safe-area insets so iOS notch + home indicator don't crop our UI. */
+  .pt-safe { padding-top: env(safe-area-inset-top); }
+  .pb-safe { padding-bottom: env(safe-area-inset-bottom); }
+  .pl-safe { padding-left: env(safe-area-inset-left); }
+  .pr-safe { padding-right: env(safe-area-inset-right); }
+  .mb-safe { margin-bottom: env(safe-area-inset-bottom); }
 }
 
+/* Mobile panel bottom-sheet slide-in. */
+@keyframes bfSheetUp {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+.bf-sheet-enter {
+  animation: bfSheetUp 240ms cubic-bezier(0.32, 0.72, 0, 1) both;
+}
+
+@keyframes bfFade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.bf-fade-enter {
+  animation: bfFade 180ms ease-out both;
+}
+
+/* Reader typography. Applied to the <article> wrapper. */
 .reader-prose {
-  @apply leading-relaxed;
+  @apply leading-relaxed text-ink;
+}
+.reader-prose p {
+  @apply my-5;
 }
 .reader-prose h1,
 .reader-prose h2,
 .reader-prose h3 {
-  @apply font-semibold mt-8 mb-3;
+  @apply font-display font-semibold mt-10 mb-3 tracking-tight text-ink;
+  text-wrap: pretty;
 }
-.reader-prose h1 { @apply text-3xl; }
-.reader-prose h2 { @apply text-2xl; }
-.reader-prose h3 { @apply text-xl; }
-.reader-prose p { @apply my-4; }
-.reader-prose a { @apply underline underline-offset-2; }
+.reader-prose h1 {
+  @apply text-4xl;
+}
+.reader-prose h2 {
+  @apply text-2xl;
+}
+.reader-prose h3 {
+  @apply text-xl;
+}
+.reader-prose a {
+  @apply underline underline-offset-4 decoration-rule hover:decoration-terracotta text-ink;
+}
 .reader-prose blockquote {
-  @apply border-l-4 border-neutral-300 dark:border-neutral-700 pl-4 italic my-4;
+  @apply border-l-2 border-terracotta pl-5 italic my-6 text-ink-muted;
 }
-.reader-prose ul { @apply list-disc ml-6 my-3; }
-.reader-prose ol { @apply list-decimal ml-6 my-3; }
+.reader-prose ul {
+  @apply list-disc ml-6 my-4;
+}
+.reader-prose ol {
+  @apply list-decimal ml-6 my-4;
+}
 .reader-prose pre {
-  @apply bg-neutral-100 dark:bg-neutral-900 p-3 rounded overflow-x-auto my-4 text-sm;
+  @apply bg-paper-deep p-4 rounded-lg overflow-x-auto my-5 text-sm font-mono;
 }
 .reader-prose code {
-  @apply bg-neutral-100 dark:bg-neutral-900 px-1 rounded text-sm;
+  @apply bg-paper-deep px-1.5 py-0.5 rounded font-mono text-[0.9em];
 }
-.reader-prose img { @apply rounded my-4 max-w-full h-auto; }
-
-.theme-sepia {
-  background-color: #f4ecd8 !important;
-  color: #5b4636 !important;
+.reader-prose img {
+  @apply rounded-lg my-6 max-w-full h-auto;
 }
 
-.scrollbar-none {
-  scrollbar-width: none;
-  -ms-overflow-style: none;
+/* Drop-cap on the reader's first paragraph. */
+.reader-prose > p:first-of-type::first-letter {
+  @apply font-display;
+  float: left;
+  font-size: 3.6em;
+  line-height: 0.9;
+  padding: 0.1em 0.12em 0 0;
+  color: var(--bf-terracotta);
+  font-weight: 600;
 }
-.scrollbar-none::-webkit-scrollbar {
-  display: none;
+
+/* Streaming caret + typing dots for chat/research panels. */
+@keyframes bfBlink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
 }
+.bf-caret {
+  display: inline-block;
+  width: 1px;
+  height: 1em;
+  margin-left: 1px;
+  background: currentColor;
+  vertical-align: -0.15em;
+  animation: bfBlink 1s steps(2, end) infinite;
+}
+
+@keyframes bfDot {
+  0%, 80%, 100% { transform: translateY(0); opacity: 0.35; }
+  40% { transform: translateY(-3px); opacity: 1; }
+}
+.bf-dot {
+  display: inline-block;
+  width: 4px;
+  height: 4px;
+  margin: 0 2px;
+  border-radius: 999px;
+  background: currentColor;
+  animation: bfDot 1.2s infinite ease-in-out;
+}
+.bf-dot:nth-child(2) { animation-delay: 0.15s; }
+.bf-dot:nth-child(3) { animation-delay: 0.3s; }
