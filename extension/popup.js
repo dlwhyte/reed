@@ -1,16 +1,20 @@
 const BASE = "http://localhost:8765";
 
 const saveBtn = document.getElementById("save-btn");
+const saveBtnText = document.getElementById("save-btn-text");
 const statusEl = document.getElementById("status");
 const statusLabel = document.getElementById("status-label");
 const statusDetail = document.getElementById("status-detail");
 const offlineWarning = document.getElementById("offline-warning");
 const recentsList = document.getElementById("recents-list");
+const tabTitleEl = document.getElementById("tab-title");
+const tabUrlEl = document.getElementById("tab-url");
+const tabFaviconEl = document.getElementById("tab-favicon");
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 function showStatus(type, label, detail) {
-    statusEl.className = type;
+    statusEl.className = `status ${type}`;
     statusEl.style.display = "block";
     statusLabel.textContent = label;
     statusDetail.textContent = detail;
@@ -26,113 +30,147 @@ function timeAgo(isoString) {
     return `${Math.floor(hrs / 24)}d ago`;
 }
 
-// ── Check backend health ──────────────────────────────────────────────────────
+function cleanHost(url) {
+    try {
+        return new URL(url).hostname.replace(/^www\./, "");
+    } catch {
+        return url;
+    }
+}
+
+// ── Backend health ───────────────────────────────────────────────────────────
 
 async function checkHealth() {
     try {
-          const res = await fetch(`${BASE}/api/health`, { signal: AbortSignal.timeout(2000) });
-          return res.ok;
+        const res = await fetch(`${BASE}/api/health`, { signal: AbortSignal.timeout(2000) });
+        return res.ok;
     } catch {
-          return false;
+        return false;
     }
 }
 
-// ── Load recent articles ──────────────────────────────────────────────────────
+// ── Active tab ───────────────────────────────────────────────────────────────
+
+async function loadCurrentTab() {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    tabTitleEl.textContent = tab?.title || "—";
+    tabUrlEl.textContent = tab?.url ? cleanHost(tab.url) : "";
+    if (tab?.favIconUrl) {
+        tabFaviconEl.src = tab.favIconUrl;
+        tabFaviconEl.onerror = () => { tabFaviconEl.style.visibility = "hidden"; };
+    } else {
+        tabFaviconEl.style.visibility = "hidden";
+    }
+    return tab;
+}
+
+// ── Recents ──────────────────────────────────────────────────────────────────
 
 async function loadRecents() {
     try {
-          const res = await fetch(`${BASE}/api/articles?state=unread&limit=5&sort=newest`);
-          if (!res.ok) return;
-          const articles = await res.json();
-          recentsList.innerHTML = "";
-          if (articles.length === 0) {
-                  recentsList.innerHTML =
-                            '<p style="padding:8px 16px 12px;font-size:13px;color:#999;">No saved articles yet.</p>';
-                  return;
-          }
-          for (const a of articles) {
-                  const item = document.createElement("a");
-                  item.className = "article-item";
-                  item.href = `${BASE}/?article=${a.id}`;
-                  item.target = "_blank";
+        const res = await fetch(`${BASE}/api/articles?state=unread&limit=5&sort=newest`);
+        if (!res.ok) return;
+        const articles = await res.json();
+        recentsList.innerHTML = "";
+        if (articles.length === 0) {
+            const empty = document.createElement("p");
+            empty.className = "article-empty";
+            empty.textContent = "Nothing shelved yet. Save your first page above.";
+            recentsList.appendChild(empty);
+            return;
+        }
+        for (const a of articles.slice(0, 5)) {
+            const item = document.createElement("a");
+            item.className = "article-item";
+            item.href = `${BASE}/?article=${a.id}`;
+            item.target = "_blank";
 
             const img = document.createElement("img");
-                  img.className = "article-thumb";
-                  img.src = a.image_url || "";
-                  img.onerror = () => { img.style.display = "none"; };
+            img.className = "article-thumb";
+            img.src = a.image_url || "";
+            img.alt = "";
+            img.onerror = () => { img.style.visibility = "hidden"; };
 
             const info = document.createElement("div");
-                  info.className = "article-info";
+            info.className = "article-info";
 
             const title = document.createElement("div");
-                  title.className = "article-title";
-                  title.textContent = a.title || a.url;
+            title.className = "article-title";
+            title.textContent = a.title || a.url;
 
             const meta = document.createElement("div");
-                  meta.className = "article-meta";
-                  meta.textContent = `${a.site_name || new URL(a.url).hostname} · ${timeAgo(a.created_at)}`;
+            meta.className = "article-meta";
+            meta.textContent = `${a.site_name || cleanHost(a.url)} · ${timeAgo(a.created_at)}`;
 
             info.appendChild(title);
-                  info.appendChild(meta);
-                  item.appendChild(img);
-                  item.appendChild(info);
-                  recentsList.appendChild(item);
-          }
+            info.appendChild(meta);
+            item.appendChild(img);
+            item.appendChild(info);
+            recentsList.appendChild(item);
+        }
     } catch {
-          // silently fail - recents are a nice-to-have
+        // silently fail - recents are a nice-to-have
     }
 }
 
-// ── Save current tab ──────────────────────────────────────────────────────────
+// ── Save flow ────────────────────────────────────────────────────────────────
 
 async function saveCurrentTab() {
     saveBtn.disabled = true;
-    saveBtn.textContent = "Saving...";
+    saveBtn.classList.add("saving");
+    saveBtnText.textContent = "Saving…";
     statusEl.style.display = "none";
 
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    const url = tab.url;
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    const url = tab?.url;
 
-  if (!url || url.startsWith("chrome://") || url.startsWith("chrome-extension://")) {
-        showStatus("error", "Can't save this page", "This isn't a regular web page.");
+    if (!url || url.startsWith("chrome://") || url.startsWith("chrome-extension://")) {
+        showStatus("error", "Can’t save this page", "This isn’t a regular web page.");
         saveBtn.disabled = false;
-        saveBtn.textContent = "Save this page";
+        saveBtn.classList.remove("saving");
+        saveBtnText.textContent = "Save to shelf";
         return;
-  }
+    }
 
-  try {
+    try {
         const res = await fetch(`${BASE}/api/save`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ url }),
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ url }),
         });
         const data = await res.json();
 
-      if (!res.ok) {
-              showStatus("error", "Error", data.detail || "Could not save article.");
-      } else if (data.duplicate) {
-              showStatus("duplicate", "Already saved", data.title || url);
-      } else {
-              showStatus("success", "Saved!", data.title || url);
-              loadRecents();
-      }
-  } catch {
-        showStatus("error", "Connection error", "Could not reach Reed. Is the backend running?");
-  }
+        if (!res.ok) {
+            showStatus("error", "Couldn’t save", data.detail || "BrowseFellow rejected the URL.");
+        } else if (data.duplicate) {
+            showStatus("duplicate", "Already on your shelf", data.title || url);
+        } else {
+            showStatus("success", "Saved to shelf", data.title || url);
+            loadRecents();
+        }
+    } catch {
+        showStatus(
+            "error",
+            "Can’t reach BrowseFellow",
+            "Is the backend running on port 8765?",
+        );
+    }
 
-  saveBtn.disabled = false;
-    saveBtn.textContent = "Save this page";
+    saveBtn.disabled = false;
+    saveBtn.classList.remove("saving");
+    saveBtnText.textContent = "Save to shelf";
 }
 
-// ── Init ──────────────────────────────────────────────────────────────────────
+// ── Init ─────────────────────────────────────────────────────────────────────
 
 (async () => {
+    loadCurrentTab();
     const online = await checkHealth();
     if (!online) {
-          offlineWarning.style.display = "block";
-          saveBtn.disabled = true;
+        offlineWarning.style.display = "block";
+        saveBtn.disabled = true;
     } else {
-          loadRecents();
+        loadRecents();
     }
 })();
 

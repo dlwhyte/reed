@@ -3,84 +3,332 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Reed</title>
+    <title>BrowseFellow</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Source+Serif+4:wght@600&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500&display=swap"
+    />
     <style>
+      :root {
+        --paper: #f8f1e4;
+        --paper-raised: #fdf8ec;
+        --paper-deep: #f2e8d3;
+        --ink: #2b2320;
+        --ink-muted: #7a6b5f;
+        --ink-faint: #b3a594;
+        --rule: #e3d6be;
+        --butter: #f2d5b8;
+        --terracotta: oklch(0.65 0.12 40);
+        --terracotta-soft: oklch(0.9 0.05 40);
+        --olive: oklch(0.55 0.08 130);
+        --olive-soft: oklch(0.92 0.04 130);
+        --sans: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
+        --display: "Source Serif 4", Georgia, serif;
+        --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+      }
+
       * { box-sizing: border-box; margin: 0; padding: 0; }
+      html, body { width: 340px; }
       body {
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-        font-size: 14px; width: 300px; background: #fafafa; color: #222;
+        font-family: var(--sans);
+        font-size: 13px;
+        color: var(--ink);
+        background: var(--paper);
+        background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='240' height='240'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.65  0 0 0 0 0.56  0 0 0 0 0.42  0 0 0 0.05 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+        background-size: 240px 240px;
+        -webkit-font-smoothing: antialiased;
       }
+
       header {
-        display: flex; align-items: center; justify-content: space-between;
-        padding: 14px 16px 12px; border-bottom: 1px solid #eee; background: white;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 14px 16px 12px;
+        border-bottom: 1px solid var(--rule);
+        background: color-mix(in srgb, var(--paper) 70%, transparent);
+        backdrop-filter: blur(8px);
       }
-      header h1 { font-size: 17px; font-weight: 700; letter-spacing: -0.3px; }
+      .wordmark {
+        display: inline-flex;
+        align-items: baseline;
+        gap: 3px;
+        font-family: var(--display);
+        font-weight: 600;
+        font-size: 18px;
+        letter-spacing: -0.04em;
+        color: var(--ink);
+      }
+      .wordmark .dot {
+        width: 5px;
+        height: 5px;
+        border-radius: 50%;
+        background: var(--terracotta);
+        align-self: center;
+        margin-left: 2px;
+        margin-bottom: 1px;
+      }
       #open-btn {
-        font-size: 12px; color: #666; text-decoration: none;
-        padding: 4px 8px; border: 1px solid #ddd; border-radius: 6px; background: white;
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        font-family: var(--mono);
+        font-size: 10px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--ink-muted);
+        text-decoration: none;
+        padding: 5px 9px;
+        border: 1px solid var(--rule);
+        border-radius: 999px;
+        background: var(--paper-raised);
+        transition: color 0.15s, border-color 0.15s;
       }
-      #open-btn:hover { background: #f0f0f0; }
+      #open-btn:hover { color: var(--ink); border-color: var(--ink-muted); }
+
+      .page {
+        padding: 14px 16px;
+      }
+
+      .tab-card {
+        border: 1px solid var(--rule);
+        background: var(--paper-raised);
+        border-radius: 12px;
+        padding: 12px;
+        display: flex;
+        gap: 10px;
+        align-items: flex-start;
+        min-height: 52px;
+      }
+      .tab-favicon {
+        width: 18px;
+        height: 18px;
+        border-radius: 4px;
+        flex-shrink: 0;
+        background: var(--rule);
+        margin-top: 2px;
+      }
+      .tab-info { min-width: 0; flex: 1; }
+      .tab-kicker {
+        font-family: var(--mono);
+        font-size: 9px;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: var(--terracotta);
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        margin-bottom: 4px;
+      }
+      .tab-kicker::before {
+        content: "";
+        display: inline-block;
+        width: 14px;
+        height: 1px;
+        background: var(--terracotta);
+      }
+      .tab-title {
+        font-family: var(--display);
+        font-weight: 600;
+        font-size: 14px;
+        line-height: 1.25;
+        letter-spacing: -0.01em;
+        color: var(--ink);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+      }
+      .tab-url {
+        font-family: var(--mono);
+        font-size: 10px;
+        color: var(--ink-faint);
+        margin-top: 4px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
       #save-btn {
-        display: block; width: 100%; padding: 10px;
-        background: #1a1a1a; color: white; border: none;
-        border-radius: 8px; font-size: 14px; font-weight: 600;
-        cursor: pointer; transition: background 0.15s;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        width: 100%;
+        padding: 11px;
+        margin-top: 12px;
+        background: var(--terracotta);
+        color: #fff;
+        border: none;
+        border-radius: 999px;
+        font-family: var(--sans);
+        font-size: 13px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: filter 0.15s, background 0.15s;
+        box-shadow: 0 1px 0 rgba(43, 35, 32, 0.02), 0 8px 20px -14px rgba(43, 35, 32, 0.3);
       }
-      #save-btn:hover { background: #333; }
-      #save-btn:disabled { background: #aaa; cursor: default; }
-      #status {
-        margin-top: 10px; padding: 10px 12px; border-radius: 8px;
-        font-size: 13px; line-height: 1.4; display: none;
+      #save-btn:hover { filter: brightness(1.06); }
+      #save-btn:disabled {
+        background: var(--rule);
+        color: rgba(255, 255, 255, 0.85);
+        cursor: default;
+        filter: none;
+        box-shadow: none;
       }
-      #status.success { background: #e6f4ea; color: #1a7a3a; }
-      #status.duplicate { background: #fff8e1; color: #7a5c00; }
-      #status.error { background: #fdecea; color: #b00020; }
-      #status .label { font-weight: 600; margin-bottom: 2px; }
-      #status .detail { color: inherit; opacity: 0.85; word-break: break-word; }
+      #save-btn.saving {
+        background: var(--paper-deep);
+        color: var(--ink-muted);
+      }
+
+      .status {
+        margin-top: 10px;
+        padding: 9px 12px;
+        border-radius: 10px;
+        font-size: 12px;
+        line-height: 1.45;
+        display: none;
+        border: 1px solid transparent;
+      }
+      .status .label {
+        font-family: var(--mono);
+        font-size: 9px;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        font-weight: 500;
+        margin-bottom: 2px;
+      }
+      .status .detail {
+        color: inherit;
+        opacity: 0.88;
+        word-break: break-word;
+      }
+      .status.success {
+        background: var(--olive-soft);
+        color: var(--olive);
+        border-color: color-mix(in srgb, var(--olive) 30%, transparent);
+      }
+      .status.duplicate {
+        background: var(--butter);
+        color: var(--terracotta);
+        border-color: color-mix(in srgb, var(--terracotta) 30%, transparent);
+      }
+      .status.error {
+        background: color-mix(in srgb, var(--terracotta-soft) 70%, white);
+        color: var(--terracotta);
+        border-color: color-mix(in srgb, var(--terracotta) 40%, transparent);
+      }
+
       #offline-warning {
-        margin-top: 10px; padding: 8px 12px; background: #fdecea;
-        color: #b00020; border-radius: 8px; font-size: 12px; display: none;
+        display: none;
+        margin-top: 10px;
+        padding: 9px 12px;
+        background: color-mix(in srgb, var(--terracotta-soft) 70%, white);
+        color: var(--terracotta);
+        border: 1px solid color-mix(in srgb, var(--terracotta) 30%, transparent);
+        border-radius: 10px;
+        font-size: 12px;
       }
-      .footer { padding: 14px 16px; }
-      #recents { border-top: 1px solid #eee; }
+      #offline-warning .label {
+        font-family: var(--mono);
+        font-size: 9px;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        font-weight: 500;
+        margin-bottom: 2px;
+      }
+
+      #recents {
+        border-top: 1px solid var(--rule);
+        margin-top: 4px;
+      }
       #recents h2 {
-        font-size: 11px; font-weight: 600; text-transform: uppercase;
-        letter-spacing: 0.5px; color: #999; padding: 10px 16px 6px;
+        font-family: var(--mono);
+        font-size: 10px;
+        font-weight: 500;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: var(--ink-faint);
+        padding: 12px 16px 4px;
       }
       .article-item {
-        display: flex; align-items: flex-start; gap: 10px;
-        padding: 8px 16px; border-bottom: 1px solid #f2f2f2;
-        text-decoration: none; color: inherit;
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        padding: 8px 16px;
+        border-bottom: 1px dashed var(--rule);
+        text-decoration: none;
+        color: inherit;
+        transition: background 0.12s;
       }
-      .article-item:hover { background: #f5f5f5; }
+      .article-item:hover { background: color-mix(in srgb, var(--rule) 45%, transparent); }
       .article-item:last-child { border-bottom: none; }
       .article-thumb {
-        width: 36px; height: 36px; border-radius: 5px;
-        object-fit: cover; flex-shrink: 0; background: #e8e8e8;
+        width: 34px;
+        height: 34px;
+        border-radius: 6px;
+        object-fit: cover;
+        flex-shrink: 0;
+        background: var(--rule);
       }
       .article-info { flex: 1; min-width: 0; }
       .article-title {
-        font-size: 13px; font-weight: 500; line-height: 1.3;
-        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        font-family: var(--display);
+        font-weight: 600;
+        font-size: 12.5px;
+        line-height: 1.3;
+        letter-spacing: -0.005em;
+        color: var(--ink);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
       }
-      .article-meta { font-size: 11px; color: #999; margin-top: 2px; }
+      .article-meta {
+        font-family: var(--mono);
+        font-size: 10px;
+        color: var(--ink-faint);
+        margin-top: 3px;
+        letter-spacing: 0.03em;
+      }
+      .article-empty {
+        padding: 4px 16px 14px;
+        font-family: var(--display);
+        font-style: italic;
+        font-size: 13px;
+        color: var(--ink-muted);
+      }
     </style>
   </head>
   <body>
     <header>
-      <h1>Reed</h1>
-      <a id="open-btn" href="http://localhost:8765" target="_blank">Open Reed</a>
+      <span class="wordmark">BrowseFellow<span class="dot"></span></span>
+      <a id="open-btn" href="http://localhost:8765" target="_blank">Open shelf ↗</a>
     </header>
-    <div class="footer">
-      <button id="save-btn">Save this page</button>
-      <div id="offline-warning">Reed backend is not running on port 8765.</div>
-      <div id="status">
+    <div class="page">
+      <div id="tab-card" class="tab-card">
+        <img id="tab-favicon" class="tab-favicon" alt="" />
+        <div class="tab-info">
+          <div class="tab-kicker">Current tab</div>
+          <div class="tab-title" id="tab-title">Loading…</div>
+          <div class="tab-url" id="tab-url"></div>
+        </div>
+      </div>
+      <button id="save-btn">
+        <span id="save-btn-text">Save to shelf</span>
+      </button>
+      <div id="offline-warning">
+        <div class="label">Shelf offline</div>
+        <div>Start the backend on port 8765 and retry.</div>
+      </div>
+      <div id="status" class="status">
         <div class="label" id="status-label"></div>
         <div class="detail" id="status-detail"></div>
       </div>
     </div>
     <div id="recents">
-      <h2>Recently saved</h2>
+      <h2>Recently shelved</h2>
       <div id="recents-list"></div>
     </div>
     <script src="popup.js"></script>
