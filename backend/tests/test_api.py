@@ -241,6 +241,20 @@ def test_cors_allows_known_origin(client):
     assert r.headers.get("access-control-allow-origin") == "https://browsefellow.com"
 
 
+def test_cors_allows_multi_segment_tailscale_hostname(client):
+    """Real Tailscale hostnames are `<host>.<tailnet>.ts.net` — two
+    subdomain segments before ts.net — not just one."""
+    origin = "https://ds-macbook-pro-2.tail3f024c.ts.net"
+    r = client.options(
+        "/api/articles",
+        headers={
+            "Origin": origin,
+            "Access-Control-Request-Method": "GET",
+        },
+    )
+    assert r.headers.get("access-control-allow-origin") == origin
+
+
 def test_cors_rejects_unknown_origin(client):
     r = client.options(
         "/api/articles",

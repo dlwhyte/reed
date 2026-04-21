@@ -28,7 +28,7 @@ _ALLOWED_ORIGIN_RE = (
     r"|https?://127\.0\.0\.1(:\d+)?"
     r"|https?://browsefellow\.com"
     r"|https?://www\.browsefellow\.com"
-    r"|https?://[a-z0-9-]+\.ts\.net"
+    r"|https?://([a-z0-9-]+\.)+ts\.net"
     r"|chrome-extension://[a-z]+"
     r")$"
 )
