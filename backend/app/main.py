@@ -1,8 +1,13 @@
 from __future__ import annotations
 
+import html as _html
+import ipaddress
 import json
 import asyncio
+import os
+import socket
 from pathlib import Path
+from urllib.parse import urlparse
 from pydantic import BaseModel
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
@@ -14,12 +19,77 @@ from . import config, db, extractor, cohere_client, agent
 
 app = FastAPI(title="Reader")
 
+# Allow the BrowseFellow frontend (wherever it's served from), the Vite dev
+# server, Tailscale's magic-DNS hostnames, any custom apex, and the Chrome
+# extension. Rejects arbitrary websites from CSRF-ing the save endpoint.
+_ALLOWED_ORIGIN_RE = (
+    r"^("
+    r"https?://localhost(:\d+)?"
+    r"|https?://127\.0\.0\.1(:\d+)?"
+    r"|https?://browsefellow\.com"
+    r"|https?://www\.browsefellow\.com"
+    r"|https?://[a-z0-9-]+\.ts\.net"
+    r"|chrome-extension://[a-z]+"
+    r")$"
+)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origin_regex=_ALLOWED_ORIGIN_RE,
     allow_methods=["*"],
     allow_headers=["*"],
+    allow_credentials=False,
 )
+
+# Cap URL input at a sane length to avoid pathological trafilatura runs on
+# attacker-supplied huge query strings.
+MAX_URL_LENGTH = 2048
+# Default: reject save URLs that resolve to the loopback / RFC1918 space,
+# since the backend can otherwise be used as an SSRF relay to whatever else
+# lives on the host / tailnet. Override during local development by setting
+# READER_ALLOW_PRIVATE_URLS=true.
+_ALLOW_PRIVATE_URLS = os.getenv("READER_ALLOW_PRIVATE_URLS", "false").lower() == "true"
+
+
+def _is_private_ip(ip: str) -> bool:
+    try:
+        addr = ipaddress.ip_address(ip)
+    except ValueError:
+        return False
+    return (
+        addr.is_private
+        or addr.is_loopback
+        or addr.is_link_local
+        or addr.is_reserved
+        or addr.is_multicast
+    )
+
+
+def _validate_save_url(url: str) -> None:
+    if len(url) > MAX_URL_LENGTH:
+        raise HTTPException(400, "URL is too long")
+    if not url.startswith(("http://", "https://")):
+        raise HTTPException(400, "URL must start with http:// or https://")
+    if _ALLOW_PRIVATE_URLS:
+        return
+    host = urlparse(url).hostname
+    if not host:
+        raise HTTPException(400, "URL is missing a host")
+    # Reject literal private IPs without DNS — catches http://127.0.0.1 etc.
+    if _is_private_ip(host):
+        raise HTTPException(400, "Refusing to fetch a private/loopback address")
+    # Resolve via DNS and reject if any resulting address is private. This
+    # catches hostnames that *point at* loopback or RFC1918 space.
+    try:
+        infos = socket.getaddrinfo(host, None)
+    except socket.gaierror:
+        # DNS failure surfaces as a normal fetch error downstream; don't
+        # block here.
+        return
+    for info in infos:
+        ip = info[4][0]
+        if _is_private_ip(ip):
+            raise HTTPException(400, "Refusing to fetch a private/loopback address")
 
 
 @app.on_event("startup")
@@ -56,8 +126,7 @@ def health():
 @app.post("/api/save")
 async def save(req: SaveReq):
     url = req.url.strip()
-    if not url.startswith(("http://", "https://")):
-        raise HTTPException(400, "URL must start with http:// or https://")
+    _validate_save_url(url)
 
     with db.connect() as conn:
         existing = conn.execute(
@@ -146,6 +215,8 @@ async def share_target(
             "<p><a href=\"/\">Back to reed</a></p></body>",
             status_code=400,
         )
+    if len(candidate) > MAX_URL_LENGTH:
+        raise HTTPException(400, "URL is too long")
     return await save_via_get(candidate)
 
 
@@ -166,14 +237,20 @@ async def save_via_get(url: str):
         status = "Error"
         color = "#c0392b"
 
+    # Titles come from user-controlled HTML and can contain `<script>` or
+    # attribute-breaking quotes. Escape everything interpolated into the
+    # response page before rendering.
+    safe_title = _html.escape(str(title))
+    safe_status = _html.escape(str(status))
+    safe_color = _html.escape(str(color))
     html = f"""<!doctype html>
-<html><head><meta charset="utf-8"><title>{status} — Reader</title>
+<html><head><meta charset="utf-8"><title>{safe_status} — Reader</title>
 <style>
   body {{ font: 15px -apple-system, BlinkMacSystemFont, sans-serif;
           margin: 0; padding: 24px; color: #222; background: #fafafa; }}
   .card {{ background: white; border-radius: 10px; padding: 20px;
            box-shadow: 0 1px 3px rgba(0,0,0,0.08); max-width: 360px; }}
-  .status {{ font-weight: 600; color: {color}; margin-bottom: 8px; }}
+  .status {{ font-weight: 600; color: {safe_color}; margin-bottom: 8px; }}
   .title {{ font-size: 14px; color: #444; word-break: break-word; }}
   .actions {{ margin-top: 16px; display: flex; gap: 8px; }}
   a, button {{ font: inherit; padding: 6px 12px; border-radius: 6px;
@@ -184,8 +261,8 @@ async def save_via_get(url: str):
 <script>setTimeout(() => window.close(), 1500);</script>
 </head><body>
   <div class="card">
-    <div class="status">{status}</div>
-    <div class="title">{title}</div>
+    <div class="status">{safe_status}</div>
+    <div class="title">{safe_title}</div>
     <div class="actions">
       <a href="http://localhost:5173/" target="_blank">Open Reader</a>
       <button onclick="window.close()">Close</button>
@@ -259,8 +336,11 @@ def update_article(article_id: int, req: UpdateReq):
         fields.append("progress = ?")
         params.append(max(0.0, min(1.0, req.progress)))
     if req.tags is not None:
+        # Dedup while preserving order so the shelf doesn't accumulate
+        # "python"/"python" from an import with casing variations.
+        normalized = [t.lower().strip() for t in req.tags if t and t.strip()]
         fields.append("tags = ?")
-        params.append(json.dumps([t.lower().strip() for t in req.tags]))
+        params.append(json.dumps(list(dict.fromkeys(normalized))))
 
     if not fields:
         return {"ok": True}

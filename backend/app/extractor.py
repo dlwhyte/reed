@@ -9,6 +9,11 @@ from trafilatura.settings import use_config
 _config = use_config()
 _config.set("DEFAULT", "EXTRACTION_TIMEOUT", "20")
 
+# Cap the number of redirects and body size we'll follow/read. A redirect loop
+# or 100MB page would otherwise stall the event loop and eat memory.
+_MAX_REDIRECTS = 5
+_MAX_BYTES = 5 * 1024 * 1024  # 5 MiB
+
 
 async def fetch_html(url: str) -> str:
     headers = {
@@ -18,11 +23,26 @@ async def fetch_html(url: str) -> str:
         "Accept": "text/html,application/xhtml+xml",
     }
     async with httpx.AsyncClient(
-        follow_redirects=True, timeout=20.0, headers=headers
+        follow_redirects=True,
+        max_redirects=_MAX_REDIRECTS,
+        timeout=20.0,
+        headers=headers,
     ) as client:
-        r = await client.get(url)
-        r.raise_for_status()
-        return r.text
+        async with client.stream("GET", url) as r:
+            r.raise_for_status()
+            chunks: list[bytes] = []
+            total = 0
+            async for chunk in r.aiter_bytes():
+                total += len(chunk)
+                if total > _MAX_BYTES:
+                    raise httpx.HTTPError("response exceeded 5 MiB cap")
+                chunks.append(chunk)
+            body = b"".join(chunks)
+            encoding = r.charset_encoding or "utf-8"
+            try:
+                return body.decode(encoding, errors="replace")
+            except LookupError:
+                return body.decode("utf-8", errors="replace")
 
 
 def extract(html: str, url: str) -> dict:
