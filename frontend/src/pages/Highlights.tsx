@@ -284,7 +284,7 @@ function ExportMenu({ rows }: { rows: HighlightWithArticle[] }) {
             onClick={() => setOpen(false)}
             aria-hidden
           />
-          <div className="absolute right-0 top-full z-20 mt-1 w-64 overflow-hidden rounded-md border border-rule bg-paper-raised shadow-modal">
+          <div className="absolute left-0 top-full z-20 mt-1 w-64 max-w-[calc(100vw-2.5rem)] overflow-hidden rounded-md border border-rule bg-paper-raised shadow-modal sm:left-auto sm:right-0">
             <ExportItem icon={Copy} onClick={copyMd}>
               Copy as Markdown
             </ExportItem>
