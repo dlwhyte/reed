@@ -93,7 +93,8 @@ async def save(req: SaveReq):
 
         try:
             vecs = await cohere_client.embed(
-                [article["title"] + "\n\n" + article["content"][:4000]]
+                [article["title"] + "\n\n" + article["content"][:4000]],
+                endpoint="save_embed",
             )
             if vecs and vecs[0]:
                 embedding_blob = cohere_client.embedding_to_blob(vecs[0])
@@ -315,7 +316,9 @@ async def semantic_search(q: str, limit: int = 20):
     if not config.LLM_READY:
         raise HTTPException(400, "Enable LLM features to use semantic search")
 
-    query_vecs = await cohere_client.embed([q], input_type="search_query")
+    query_vecs = await cohere_client.embed(
+        [q], input_type="search_query", endpoint="semantic_search"
+    )
     if not query_vecs or not query_vecs[0]:
         return []
     qvec = query_vecs[0]
@@ -502,6 +505,75 @@ def get_config():
         "embed_model": config.COHERE_EMBED_MODEL,
         "port": config.PORT,
     }
+
+
+# Cohere list pricing, USD per 1M tokens. Update if Cohere changes prices;
+# these are hardcoded so the $ estimate survives being offline.
+COHERE_PRICING = {
+    "command-a-03-2025": {"input": 2.50, "output": 10.00},
+    # Older / aliased chat models — fall back to Command A pricing.
+    "command-a": {"input": 2.50, "output": 10.00},
+    # Embed v3 is billed per input token with no output.
+    "embed-english-v3.0": {"input": 0.10, "output": 0.0},
+    "embed-multilingual-v3.0": {"input": 0.10, "output": 0.0},
+}
+
+
+def _price(model: str, input_tokens: int, output_tokens: int) -> float:
+    p = COHERE_PRICING.get(model)
+    if not p:
+        # Unknown model — assume chat-tier pricing so estimates don't under-report.
+        p = {"input": 2.50, "output": 10.00}
+    return (input_tokens * p["input"] + output_tokens * p["output"]) / 1_000_000
+
+
+@app.get("/api/usage")
+def get_usage():
+    """Return Cohere token usage rollups. All times are compared against
+    SQLite's CURRENT_TIMESTAMP (UTC)."""
+    with db.connect() as conn:
+        def rollup(window_sql: str) -> dict:
+            rows = conn.execute(
+                f"""SELECT endpoint, model,
+                          COALESCE(SUM(input_tokens), 0) AS input_tokens,
+                          COALESCE(SUM(output_tokens), 0) AS output_tokens,
+                          COUNT(*) AS calls
+                     FROM cohere_usage
+                     {window_sql}
+                     GROUP BY endpoint, model""",
+            ).fetchall()
+            by_endpoint: dict[str, dict] = {}
+            total_in = total_out = total_usd = total_calls = 0
+            for r in rows:
+                usd = _price(r["model"], r["input_tokens"], r["output_tokens"])
+                bucket = by_endpoint.setdefault(
+                    r["endpoint"],
+                    {"input_tokens": 0, "output_tokens": 0, "usd": 0.0, "calls": 0},
+                )
+                bucket["input_tokens"] += r["input_tokens"]
+                bucket["output_tokens"] += r["output_tokens"]
+                bucket["usd"] += usd
+                bucket["calls"] += r["calls"]
+                total_in += r["input_tokens"]
+                total_out += r["output_tokens"]
+                total_usd += usd
+                total_calls += r["calls"]
+            return {
+                "input_tokens": total_in,
+                "output_tokens": total_out,
+                "usd": round(total_usd, 4),
+                "calls": total_calls,
+                "by_endpoint": {
+                    k: {**v, "usd": round(v["usd"], 4)} for k, v in by_endpoint.items()
+                },
+            }
+
+        return {
+            "today": rollup("WHERE ts >= date('now', 'start of day')"),
+            "month": rollup("WHERE ts >= date('now', 'start of month')"),
+            "all_time": rollup(""),
+            "pricing": COHERE_PRICING,
+        }
 
 
 # --- Serve the built frontend from the same origin (if it exists) ------------

@@ -58,9 +58,28 @@ export type HighlightWithArticle = Highlight & {
   article_url: string;
 };
 
+export type UsageBucket = {
+  input_tokens: number;
+  output_tokens: number;
+  usd: number;
+  calls: number;
+  by_endpoint: Record<
+    string,
+    { input_tokens: number; output_tokens: number; usd: number; calls: number }
+  >;
+};
+
+export type UsageSnapshot = {
+  today: UsageBucket;
+  month: UsageBucket;
+  all_time: UsageBucket;
+  pricing: Record<string, { input: number; output: number }>;
+};
+
 export const api = {
   health: () => j<{ ok: boolean; llm: boolean }>("/health"),
   config: () => j<{ llm_ready: boolean; enable_llm: boolean; web_search_ready: boolean; chat_model: string; embed_model: string; port: number }>("/config"),
+  usage: () => j<UsageSnapshot>("/usage"),
   save: (url: string) => j<{ id: number; duplicate: boolean; title?: string }>("/save", { method: "POST", body: JSON.stringify({ url }) }),
   list: (state: string, tag?: string | null, sort = "newest") => {
     const qs = new URLSearchParams({ state, sort });

@@ -2,19 +2,20 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { ArrowLeft, Check, Copy } from "lucide-react";
 import { clsx } from "clsx";
-import { api } from "../lib/api";
+import { api, type UsageBucket, type UsageSnapshot } from "../lib/api";
 import { useStore } from "../store";
 import { Wordmark } from "../components/primitives/Wordmark";
 import { Icon } from "../components/primitives/Icon";
 import { IconButton } from "../components/primitives/IconButton";
 import { PocketImport } from "../components/PocketImport";
 
-type TabId = "reader" | "save" | "status";
+type TabId = "reader" | "save" | "status" | "usage";
 
 const TABS: { id: TabId; label: string }[] = [
   { id: "reader", label: "Reader" },
   { id: "save", label: "Save from anywhere" },
   { id: "status", label: "Backend · models" },
+  { id: "usage", label: "Cohere usage" },
 ];
 
 export default function Settings() {
@@ -72,6 +73,7 @@ export default function Settings() {
           {tab === "reader" && <ReaderPrefs prefs={prefs} setPrefs={setPrefs} />}
           {tab === "save" && <SavePrefs />}
           {tab === "status" && <StatusPanel cfg={cfg} health={health} />}
+          {tab === "usage" && <UsagePanel />}
         </div>
       </div>
     </div>
@@ -416,5 +418,178 @@ function StatusPill({
       />
       {ok ? okLabel : offLabel}
     </span>
+  );
+}
+
+const ENDPOINT_LABELS: Record<string, string> = {
+  save_summarize: "Save · summary + tags",
+  save_embed: "Save · embedding",
+  chat: "Chat with article",
+  agent: "Research agent",
+  agent_search_library: "Research agent · library search",
+  semantic_search: "Semantic search (⌘K)",
+  embed: "Embedding (other)",
+};
+
+function fmtNum(n: number): string {
+  if (n >= 1_000_000) return (n / 1_000_000).toFixed(2) + "M";
+  if (n >= 10_000) return (n / 1_000).toFixed(1) + "k";
+  if (n >= 1_000) return (n / 1_000).toFixed(2) + "k";
+  return n.toLocaleString();
+}
+
+function fmtUsd(n: number): string {
+  if (n === 0) return "$0.00";
+  if (n < 0.01) return "<$0.01";
+  return "$" + n.toFixed(n < 1 ? 3 : 2);
+}
+
+function UsagePanel() {
+  const [snap, setSnap] = useState<UsageSnapshot | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+
+  async function refresh() {
+    try {
+      setSnap(await api.usage());
+      setErr(null);
+    } catch (e: any) {
+      setErr(e?.message || "Failed to load usage");
+    }
+  }
+
+  useEffect(() => {
+    refresh();
+  }, []);
+
+  if (err) {
+    return (
+      <Card title="Cohere usage" hint="Token spend and estimated cost, tallied locally.">
+        <p className="font-sans text-[13px] text-terracotta">{err}</p>
+      </Card>
+    );
+  }
+  if (!snap) {
+    return (
+      <Card title="Cohere usage" hint="Token spend and estimated cost, tallied locally.">
+        <p className="font-sans text-[13px] text-ink-muted">Loading…</p>
+      </Card>
+    );
+  }
+
+  const buckets: { id: "today" | "month" | "all_time"; label: string }[] = [
+    { id: "today", label: "Today" },
+    { id: "month", label: "This month" },
+    { id: "all_time", label: "All time" },
+  ];
+
+  const topEndpoint = (() => {
+    const m = snap.month.by_endpoint;
+    const entries = Object.entries(m);
+    if (!entries.length) return null;
+    entries.sort((a, b) => b[1].usd - a[1].usd);
+    const [name, v] = entries[0];
+    const share = snap.month.usd ? (v.usd / snap.month.usd) * 100 : 0;
+    return { name, share };
+  })();
+
+  return (
+    <div className="space-y-5">
+      <Card
+        title="Cohere usage"
+        hint="Tallied locally from every call to chat/embed. Estimate uses Cohere's list prices — your actual invoice is authoritative."
+      >
+        <div className="grid grid-cols-3 gap-3">
+          {buckets.map((b) => {
+            const v = snap[b.id];
+            return (
+              <div
+                key={b.id}
+                className="rounded-lg border border-rule bg-paper p-3"
+              >
+                <div className="font-mono text-[10px] uppercase tracking-[0.12em] text-ink-faint">
+                  {b.label}
+                </div>
+                <div className="mt-1 font-display text-[22px] font-semibold leading-tight text-ink">
+                  {fmtUsd(v.usd)}
+                </div>
+                <div className="mt-1 font-mono text-[11px] text-ink-muted">
+                  {fmtNum(v.input_tokens)} in · {fmtNum(v.output_tokens)} out
+                </div>
+                <div className="mt-0.5 font-mono text-[11px] text-ink-faint">
+                  {v.calls} call{v.calls === 1 ? "" : "s"}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {topEndpoint && (
+          <p className="mt-1 font-display text-[13px] italic text-ink-muted">
+            Biggest driver this month:{" "}
+            <strong className="not-italic text-ink">
+              {ENDPOINT_LABELS[topEndpoint.name] || topEndpoint.name}
+            </strong>{" "}
+            ({topEndpoint.share.toFixed(0)}% of spend).
+          </p>
+        )}
+
+        <button
+          type="button"
+          onClick={refresh}
+          className="inline-flex w-fit items-center gap-1.5 rounded-md border border-rule bg-paper-raised px-3 py-1.5 font-sans text-[12px] font-medium text-ink-muted hover:text-ink"
+        >
+          Refresh
+        </button>
+      </Card>
+
+      <Card
+        title="This month · by feature"
+        hint="Where the tokens went. Research agent runs a tool loop, so it typically costs 3-8× a single chat."
+      >
+        <EndpointBreakdown bucket={snap.month} />
+      </Card>
+    </div>
+  );
+}
+
+function EndpointBreakdown({ bucket }: { bucket: UsageBucket }) {
+  const entries = Object.entries(bucket.by_endpoint);
+  if (!entries.length) {
+    return (
+      <p className="font-sans text-[13px] text-ink-muted">
+        No Cohere calls yet this month.
+      </p>
+    );
+  }
+  entries.sort((a, b) => b[1].usd - a[1].usd);
+  const total = bucket.usd || 1;
+
+  return (
+    <div className="space-y-2">
+      {entries.map(([name, v]) => {
+        const pct = (v.usd / total) * 100;
+        return (
+          <div key={name}>
+            <div className="flex items-baseline justify-between gap-3">
+              <span className="font-sans text-[13px] text-ink">
+                {ENDPOINT_LABELS[name] || name}
+              </span>
+              <span className="font-mono text-[12px] text-ink-muted">
+                {fmtUsd(v.usd)} · {v.calls} call{v.calls === 1 ? "" : "s"}
+              </span>
+            </div>
+            <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-rule/40">
+              <div
+                className="h-full bg-terracotta"
+                style={{ width: `${Math.max(2, pct)}%` }}
+              />
+            </div>
+            <div className="mt-1 font-mono text-[10px] text-ink-faint">
+              {fmtNum(v.input_tokens)} input · {fmtNum(v.output_tokens)} output
+            </div>
+          </div>
+        );
+      })}
+    </div>
   );
 }

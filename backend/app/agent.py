@@ -75,7 +75,9 @@ SIMILARITY_THRESHOLD = 0.35
 
 
 async def _tool_search_library(query: str, limit: int = 5) -> dict:
-    query_vecs = await cohere_client.embed([query], input_type="search_query")
+    query_vecs = await cohere_client.embed(
+        [query], input_type="search_query", endpoint="agent_search_library"
+    )
     if not query_vecs or not query_vecs[0]:
         return {"results": [], "total_library": 0, "note": "embedding failed"}
     qvec = query_vecs[0]
@@ -268,6 +270,9 @@ async def run_research(article_id: int, question: str) -> AsyncIterator[dict]:
         except Exception as e:
             yield {"type": "error", "message": f"model error: {e}"}
             return
+
+        inp, out = cohere_client._extract_tokens(resp)
+        cohere_client.record_usage("agent", config.COHERE_CHAT_MODEL, inp, out)
 
         msg = resp.message
         tool_calls = getattr(msg, "tool_calls", None) or []

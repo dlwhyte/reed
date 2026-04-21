@@ -54,6 +54,18 @@ CREATE TABLE IF NOT EXISTS highlights (
     created_at TEXT DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (article_id) REFERENCES articles(id) ON DELETE CASCADE
 );
+
+CREATE TABLE IF NOT EXISTS cohere_usage (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ts TEXT DEFAULT CURRENT_TIMESTAMP,
+    endpoint TEXT NOT NULL,
+    model TEXT NOT NULL,
+    input_tokens INTEGER DEFAULT 0,
+    output_tokens INTEGER DEFAULT 0
+);
+
+CREATE INDEX IF NOT EXISTS idx_cohere_usage_ts ON cohere_usage(ts);
+CREATE INDEX IF NOT EXISTS idx_cohere_usage_endpoint ON cohere_usage(endpoint);
 """
 
 
