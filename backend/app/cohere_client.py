@@ -2,10 +2,9 @@ from __future__ import annotations
 
 import json
 import struct
-import sqlite3
 from typing import AsyncIterator
 import cohere
-from . import config
+from . import config, db
 
 
 _client: cohere.AsyncClientV2 | None = None
@@ -55,16 +54,12 @@ def record_usage(endpoint: str, model: str, input_tokens: int, output_tokens: in
     if not input_tokens and not output_tokens:
         return
     try:
-        conn = sqlite3.connect(config.DB_PATH)
-        try:
+        with db.connect() as conn:
             conn.execute(
                 "INSERT INTO cohere_usage (endpoint, model, input_tokens, output_tokens) "
                 "VALUES (?, ?, ?, ?)",
                 (endpoint, model, int(input_tokens), int(output_tokens)),
             )
-            conn.commit()
-        finally:
-            conn.close()
     except Exception as e:
         print(f"[usage] record failed: {e}")
 

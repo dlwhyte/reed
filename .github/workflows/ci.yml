@@ -5,9 +5,18 @@ on:
     branches: [main]
   pull_request:
 
+# Cancel superseded runs when a branch is force-pushed so a rapid-fire
+# sequence doesn't queue multiple redundant builds.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
 jobs:
   frontend:
-    name: Frontend (typecheck + build)
+    name: Frontend (typecheck + build + audit)
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -22,9 +31,15 @@ jobs:
       - run: npm ci
       - run: npx tsc --noEmit
       - run: npm run build
+      - name: npm audit (critical, prod deps only)
+        # Threshold is `critical` rather than `high` because @capacitor/cli
+        # v6 pulls a vulnerable `tar` transitively and the fix requires a
+        # two-major-version jump (v8.3+). That's a build-time-only risk,
+        # tracked as a follow-up. Revisit once @capacitor/* is bumped.
+        run: npm audit --omit=dev --audit-level=critical
 
   backend:
-    name: Backend (import + lint)
+    name: Backend (pytest + pip-audit)
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -35,15 +50,44 @@ jobs:
         with:
           python-version: "3.11"
           cache: pip
-          cache-dependency-path: backend/requirements.txt
-      - run: pip install -r requirements.txt
-      - name: Smoke test — imports and DB schema
-        run: |
-          python -c "
-          from app import main, db, extractor, cohere_client, agent, config
-          print('all backend modules import OK')
-          "
+          cache-dependency-path: backend/requirements-dev.txt
+      - run: pip install -r requirements-dev.txt
+      - name: Run pytest
         env:
           COHERE_API_KEY: ""
           ENABLE_LLM: "false"
           DATA_DIR: /tmp/readerdata
+        run: pytest -v
+      - name: pip-audit (Python deps)
+        run: |
+          pip install pip-audit
+          pip-audit -r requirements.txt
+
+  secret-scan:
+    name: Secret scan (gitleaks)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  codeql:
+    name: CodeQL (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      actions: read
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [python, javascript]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+      - uses: github/codeql-action/analyze@v3
