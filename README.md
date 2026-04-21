@@ -104,7 +104,11 @@ pip install -r requirements-dev.txt
 pytest
 ```
 
-All 18 tests run in under a second against a temp SQLite — no network, no Cohere calls. The same suite plus `pip-audit`, `npm audit`, `gitleaks`, and CodeQL runs on every push via GitHub Actions (see [CI](.github/workflows/ci.yml)).
+All 18 tests run in under a second against a temp SQLite — no network, no Cohere calls.
+
+A **Playwright smoke test** (`cd frontend && npm run test:e2e`) then drives a real browser against the built frontend + a freshly seeded backend: open the fixture article, select a phrase, click Highlight, verify it appears in the highlights index and persists through a reload. ~3 seconds, no Cohere, no outbound network.
+
+CI runs everything — pytest, pip-audit, tsc, vite build, npm audit, Playwright e2e, gitleaks, CodeQL — on every push (see [CI](.github/workflows/ci.yml)).
 
 Deferred work is tracked in [`TODO.md`](TODO.md).
 

@@ -42,3 +42,8 @@ frontend/ios/App/App.xcodeproj/xcuserdata/
 frontend/ios/App/build/
 frontend/ios/DerivedData/
 *.xcuserstate
+
+# Playwright artifacts
+frontend/test-results/
+frontend/playwright-report/
+frontend/playwright/.cache/
