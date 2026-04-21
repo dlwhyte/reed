@@ -447,13 +447,21 @@ function fmtUsd(n: number): string {
 function UsagePanel() {
   const [snap, setSnap] = useState<UsageSnapshot | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const [lastRefresh, setLastRefresh] = useState<number | null>(null);
 
   async function refresh() {
+    setRefreshing(true);
     try {
       setSnap(await api.usage());
       setErr(null);
+      setLastRefresh(Date.now());
     } catch (e: any) {
       setErr(e?.message || "Failed to load usage");
+    } finally {
+      // Keep the spinner on-screen for a beat so the user can see that
+      // something happened even when the fetch is sub-100ms.
+      setTimeout(() => setRefreshing(false), 250);
     }
   }
 
@@ -533,13 +541,34 @@ function UsagePanel() {
           </p>
         )}
 
-        <button
-          type="button"
-          onClick={refresh}
-          className="inline-flex w-fit items-center gap-1.5 rounded-md border border-rule bg-paper-raised px-3 py-1.5 font-sans text-[12px] font-medium text-ink-muted hover:text-ink"
-        >
-          Refresh
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={refresh}
+            disabled={refreshing}
+            className="inline-flex w-fit items-center gap-1.5 rounded-md border border-rule bg-paper-raised px-3 py-1.5 font-sans text-[12px] font-medium text-ink-muted transition-colors hover:text-ink disabled:opacity-60 disabled:cursor-not-allowed"
+          >
+            <svg
+              className={clsx("h-3 w-3", refreshing && "animate-spin")}
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden
+            >
+              <path d="M21 12a9 9 0 1 1-3.27-6.93" />
+              <polyline points="21 3 21 9 15 9" />
+            </svg>
+            {refreshing ? "Refreshing…" : "Refresh"}
+          </button>
+          {lastRefresh && !refreshing && (
+            <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-ink-faint">
+              updated {new Date(lastRefresh).toLocaleTimeString()}
+            </span>
+          )}
+        </div>
       </Card>
 
       <Card
