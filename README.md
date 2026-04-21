@@ -1,147 +1,174 @@
-# reed
+# BrowseFellow
 
-A personal read-it-later app that runs on your Mac. Pocket-style clean reader with a **Cohere-powered research agent** that can search your library, read saved articles, and browse the web to dig into whatever you're reading.
+A warm, editorial read-it-later app that runs on your Mac. Pocket-style clean reader with a **Cohere-powered research agent** that can search your shelf, read saved articles, and browse the web to dig into whatever you're reading.
 
 ## Why
 
-Pocket shut down in July 2025. This is a local-first replacement: your data lives in a single SQLite file on your Mac, never leaves, and the app keeps working even without an internet connection or LLM API key.
+Pocket shut down in July 2025. BrowseFellow is a local-first replacement: your data lives in a single SQLite file on your Mac, never leaves, and the app keeps working even without an internet connection or LLM API key.
 
 ## Features
 
 **Reader**
 - Save any URL → clean article extraction (trafilatura)
-- - Reader view: serif/sans, adjustable font size + width, light / dark / sepia
-  - - Library with unread / favorites / archived / all tabs, sortable
-    - - Manual + auto tags, keyword search (SQLite FTS5)
-      - - Bookmarklet for one-click saving from any browser
-       
-        - **LLM (Cohere)**
-        - - Auto-summary (1-line + TLDR) and auto-tags on save
-          - - Semantic search across your library (Embed v3)
-            - - Chat with any article (streaming)
-              - - "Similar articles" via embedding cosine with similarity threshold
-               
-                - **Research Companion agent**
-                - - Tool-using loop on Command A: `search_library`, `read_article`, `search_web`
-                  - - Streams agent trace: plan → tool calls → results → synthesized answer
-                    - - Inline `[1]`, `[2]` citations that link to a Sources list
-                      - - Optional web search via Tavily (free tier)
-                       
-                        - **Ops**
-                        - - Single URL (`http://localhost:8765`) — backend serves built frontend
-                          - - `launchd` plist for always-on (auto-start on login, auto-restart on crash)
-                            - - Zero third-party runtime dependencies besides Cohere + optional Tavily
-                             
-                              - ## Stack
-                              - - **Backend**: FastAPI + SQLite (+ FTS5) + trafilatura + Cohere Python SDK
-                                - - **Frontend**: Vite + React + TypeScript + Tailwind
-                                  - - **Data**: `~/ReaderData/reader.db` (single file, easy to back up)
-                                   
-                                    - ## Setup
-                                   
-                                    - ```bash
-                                      git clone https://github.com/dlwhyte/reed.git
-                                      cd reed
+- Three reader themes (paper / sepia / dusk), serif or sans, adjustable size + column width
+- Terracotta scroll-progress rule, "N min left" indicator, scroll position persisted across sessions and devices
+- In-place text-selection highlights, stored in SQLite and exportable as Markdown or JSON
+- Keyboard shortcuts (`- + f a t c r ? gl gh`), press `?` for the cheat sheet
 
-                                      # 1. API keys
-                                      cp .env.example .env
-                                      # edit .env:
-                                      # COHERE_API_KEY=... (required for LLM features; dashboard.cohere.com)
-                                      # TAVILY_API_KEY=... (optional; tavily.com free tier enables web search)
+**Library**
+- Unread / favorites / archived / all tabs, sortable
+- Mixed / Cards / List density (persisted)
+- Tag rail with live filtering, shareable `/?tag=<name>` URLs
+- Inline tag editor in the Reader with autocomplete across your shelf
+- Keyword + semantic search (Cohere Embed v3) with an instant `⌘K` command palette
+- Editorial empty state, paper-toned loading skeletons
 
-                                      # 2. Build the frontend (produces frontend/dist/ which the backend serves)
-                                      cd frontend
-                                      npm install
-                                      npm run build
-                                      cd ..
+**LLM (Cohere)**
+- Auto-summary (1-line + TL;DR) and auto-tags on save
+- Chat with any article — streaming, paragraph-cited
+- "Similar articles" via embedding cosine with similarity threshold
 
-                                      # 3. First run — creates venv, installs deps, starts server
-                                      ./backend/run.sh
-                                      ```
+**Research Companion agent**
+- Tool-using loop on Command A: `search_library`, `read_article`, `search_web`
+- Live trace: plan → tool calls → results → synthesized answer
+- Inline `[n]` citations that link to a Sources list
+- Optional web search via Tavily (free tier)
 
-                                      Open **http://localhost:8765**.
+**Save from anywhere**
+- Desktop bookmarklet (Settings → Bookmarklet)
+- Chrome extension (toolbar icon + right-click context menu, `extension/`)
+- iOS Shortcut for the Share Sheet (step-by-step guide in Settings)
+- **Import from Pocket** — drag a CSV export into Settings; BrowseFellow preserves tags and mirrors archived status
 
-                                      ## Always-on (launchd)
+**Ops**
+- Single URL (`http://localhost:8765`) — backend serves built frontend
+- `launchd` plist for always-on (auto-start on login, auto-restart on crash)
+- Zero third-party runtime dependencies besides Cohere + optional Tavily
 
-                                      Run the backend automatically on Mac login, restart on crash, never think about it again:
+## Stack
 
-                                      ```bash
-                                      ./scripts/install-launchd.sh
-                                      ```
+- **Backend**: FastAPI + SQLite (+ FTS5) + trafilatura + Cohere Python SDK
+- **Frontend**: Vite + React 18 + TypeScript + Tailwind (token-driven BrowseFellow theme)
+- **Mobile**: Capacitor wrapper for iOS
+- **Data**: `~/ReaderData/reader.db` (single file, easy to back up)
 
-                                      Backend now answers at `http://localhost:8765` whenever your Mac is on. Logs: `./logs/reader.{out,err}.log`. Stop / uninstall: `./scripts/uninstall-launchd.sh`.
+## Setup
 
-                                      ## Bookmarklet
+```bash
+git clone https://github.com/dlwhyte/reed.git browsefellow
+cd browsefellow
 
-                                      Go to **Settings → Bookmarklet** and drag the button to your browser's bookmarks bar. Click it on any article to save directly to reed. Works cross-origin from HTTPS pages (opens a tiny popup to the local backend, closes itself after saving).
+# 1. API keys
+cp .env.example .env
+# edit .env:
+# COHERE_API_KEY=...  (required for LLM features; dashboard.cohere.com)
+# TAVILY_API_KEY=...  (optional; tavily.com free tier enables web search)
 
-                                      ## Chrome Extension
+# 2. Build the frontend (produces frontend/dist/ which the backend serves)
+cd frontend
+npm install
+npm run build
+cd ..
 
-                                      A Chrome extension lives in `extension/` for a smoother save experience than the bookmarklet.
+# 3. First run — creates venv, installs deps, starts server
+./backend/run.sh
+```
 
-                                      **Features**
-                                      - Toolbar icon — click to save the current page instantly
-                                      - - Shows saved / already saved / error feedback in a popup
-                                        - - Lists your 5 most recent unread articles
-                                          - - Right-click any page or link → "Save to Reed"
-                                           
-                                            - **Install (unpacked — no store needed)**
-                                           
-                                            - 1. Generate icons from the existing favicon (one-time setup):
-                                              2. ```bash
-                                                 brew install librsvg
-                                                 mkdir -p extension/icons
-                                                 rsvg-convert -w 16 -h 16 frontend/public/favicon.svg -o extension/icons/icon16.png
-                                                 rsvg-convert -w 32 -h 32 frontend/public/favicon.svg -o extension/icons/icon32.png
-                                                 rsvg-convert -w 48 -h 48 frontend/public/favicon.svg -o extension/icons/icon48.png
-                                                 rsvg-convert -w 128 -h 128 frontend/public/favicon.svg -o extension/icons/icon128.png
-                                                 ```
-                                                 2. Open `chrome://extensions` in Chrome
-                                                 3. 3. Enable **Developer mode** (top right toggle)
-                                                    4. 4. Click **Load unpacked** and select the `extension/` folder
-                                                      
-                                                       5. The extension appears in your toolbar immediately. No account, no review, no publishing required.
-                                                      
-                                                       6. ## Project layout
-                                                      
-                                                       7. ```
-                                                          reed/
-                                                          ├── backend/
-                                                          │   ├── app/
-                                                          │   │   ├── main.py         # FastAPI routes + SPA serving
-                                                          │   │   ├── db.py           # SQLite schema, FTS5 triggers
-                                                          │   │   ├── extractor.py    # trafilatura-based article extraction
-                                                          │   │   ├── cohere_client.py # Cohere calls: chat, embed, stream
-                                                          │   │   ├── agent.py        # research agent: tool defs + loop
-                                                          │   │   └── config.py
-                                                          │   ├── requirements.txt
-                                                          │   └── run.sh
-                                                          ├── extension/              # Chrome extension
-                                                          │   ├── manifest.json
-                                                          │   ├── background.js       # service worker: context menus + save logic
-                                                          │   ├── popup.html          # toolbar popup UI
-                                                          │   ├── popup.js            # popup logic: save, recents, health check
-                                                          │   └── icons/              # generated from frontend/public/favicon.svg
-                                                          ├── frontend/
-                                                          │   └── src/
-                                                          │       ├── App.tsx
-                                                          │       ├── pages/          # Library, Reader, Settings
-                                                          │       ├── components/     # SaveBar, ArticleCard, ChatPanel,
-                                                          │       │                   # ResearchPanel (with citation parser)
-                                                          │       ├── lib/api.ts      # fetch wrappers + SSE streams
-                                                          │       └── store.ts
-                                                          ├── scripts/
-                                                          │   ├── com.user.reader.plist
-                                                          │   ├── install-launchd.sh
-                                                          │   └── uninstall-launchd.sh
-                                                          ├── .env.example
-                                                          └── .gitignore
-                                                          ```
+Open **http://localhost:8765**.
 
-                                                          ## Disable LLM features
+### Dev mode (hot reload)
 
-                                                          Set `ENABLE_LLM=false` in `.env` or leave `COHERE_API_KEY` empty. Reader keeps working — only summaries, auto-tags, chat, semantic search, and research agent are skipped.
+Run the backend and a separate Vite dev server:
 
-                                                          ## License
+```bash
+./backend/run.sh                # terminal A — :8765
+cd frontend && npm run dev      # terminal B — :5173 (proxies /api to :8765)
+```
 
-                                                          MIT — see [LICENSE](LICENSE).
+Open **http://localhost:5173**.
+
+### Python 3.9 note
+
+BrowseFellow runs cleanly on macOS's stock Python (currently 3.9). The code uses modern type-union syntax (`str | None`), which 3.9 handles via `from __future__ import annotations` + `eval_type_backport` — both already wired up, no setup needed.
+
+## Run on a fresh Mac
+
+On a different machine, after `git clone`:
+
+1. Install Node.js (`brew install node`) if it isn't already.
+2. Recreate `.env` from `.env.example` — your Cohere/Tavily keys aren't committed.
+3. Run the three-step setup above.
+
+The SQLite shelf is also gitignored, so the new Mac starts empty. To move saved articles over, copy `~/ReaderData/reader.db` by hand (or use the Pocket import path for a clean reset).
+
+If you use the **iOS Capacitor build** from the new Mac, note that `frontend/src/lib/api.ts` has a hard-coded Tailscale hostname (`DEFAULT_NATIVE_BASE`) that points at the original machine. Either change it there, or override at runtime from the iOS web view:
+
+```js
+localStorage.setItem("reed.backend", "http://<your-mac>:8765");
+```
+
+## Always-on (launchd)
+
+Run the backend automatically on Mac login, restart on crash, never think about it again:
+
+```bash
+./scripts/install-launchd.sh
+```
+
+Backend answers at `http://localhost:8765` whenever your Mac is on. Logs: `./logs/reader.{out,err}.log`. Stop / uninstall: `./scripts/uninstall-launchd.sh`.
+
+## Chrome extension
+
+Lives in `extension/`. Install unpacked — no store needed:
+
+```bash
+# One-time: generate icons from the favicon
+brew install librsvg
+mkdir -p extension/icons
+rsvg-convert -w 16 -h 16 frontend/public/favicon.svg -o extension/icons/icon16.png
+rsvg-convert -w 32 -h 32 frontend/public/favicon.svg -o extension/icons/icon32.png
+rsvg-convert -w 48 -h 48 frontend/public/favicon.svg -o extension/icons/icon48.png
+rsvg-convert -w 128 -h 128 frontend/public/favicon.svg -o extension/icons/icon128.png
+```
+
+Then open `chrome://extensions`, toggle **Developer mode**, click **Load unpacked**, select the `extension/` folder.
+
+## Project layout
+
+```
+browsefellow/
+├── backend/
+│   ├── app/
+│   │   ├── main.py            # FastAPI routes + SPA serving
+│   │   ├── db.py              # SQLite schema, FTS5 triggers
+│   │   ├── extractor.py       # trafilatura-based article extraction
+│   │   ├── cohere_client.py   # Cohere calls: chat, embed, stream
+│   │   ├── agent.py           # research agent: tool defs + loop
+│   │   └── config.py
+│   ├── requirements.txt
+│   └── run.sh
+├── extension/                 # Chrome extension (popup + background)
+├── frontend/
+│   └── src/
+│       ├── App.tsx
+│       ├── pages/             # Library, Reader, Settings, Tags, Highlights
+│       ├── components/
+│       │   ├── primitives/    # Wordmark, Icon, TabPill, TagChip, Cite, …
+│       │   ├── reader/        # HighlightLayer, TagEditor, ShortcutsHelp, …
+│       │   ├── panels/        # shared Composer
+│       │   └── CommandPalette.tsx, LibrarySkeleton.tsx, PocketImport.tsx, …
+│       ├── lib/               # api, tokens, pocketImport, exportHighlights, hooks
+│       └── store.ts
+├── design_handoff_browsefellow/   # original design reference (HTML + JSX prototypes)
+├── scripts/                       # launchd install/uninstall
+├── .env.example
+└── .gitignore
+```
+
+## Disable LLM features
+
+Set `ENABLE_LLM=false` in `.env` or leave `COHERE_API_KEY` empty. Reader keeps working — only summaries, auto-tags, chat, semantic search, and research agent are skipped.
+
+## License
+
+MIT — see [LICENSE](LICENSE).

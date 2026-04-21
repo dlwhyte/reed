@@ -1,0 +1,611 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>BrowseFellow — Reader redesign</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,500;0,8..60,600;0,8..60,700;1,8..60,400;1,8..60,600&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  html, body { margin: 0; padding: 0; background: #f0eee9; }
+  body { font-family: 'Inter', system-ui, sans-serif; color: #2B2320; }
+  @keyframes reedBlink { 0%,49% { opacity: 1 } 50%,100% { opacity: 0 } }
+  @keyframes reedDot {
+    0%, 80%, 100% { opacity: 0.3; transform: translateY(0); }
+    40% { opacity: 1; transform: translateY(-3px); }
+  }
+  button { font-family: inherit; }
+  textarea { font-family: inherit; }
+  *, *::before, *::after { box-sizing: border-box; }
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.15); border-radius: 5px; border: 2px solid transparent; background-clip: padding-box; }
+  ::-webkit-scrollbar-track { background: transparent; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<script type="text/babel" src="design-canvas.jsx"></script>
+<script type="text/babel" src="ios-frame.jsx"></script>
+<script type="text/babel" src="components/tokens.jsx"></script>
+<script type="text/babel" src="components/data.jsx"></script>
+<script type="text/babel" src="components/primitives.jsx"></script>
+<script type="text/babel" src="components/panels.jsx"></script>
+<script type="text/babel" src="components/library.jsx"></script>
+<script type="text/babel" src="components/reader.jsx"></script>
+<script type="text/babel" src="components/mobile.jsx"></script>
+<script type="text/babel" src="components/settings.jsx"></script>
+<script type="text/babel" src="components/flows.jsx"></script>
+<script type="text/babel" src="components/phase2.jsx"></script>
+
+<script type="text/babel" data-presets="react">
+
+// ─────────────────────────────────────────────────────────────
+// Tweaks — single persistent block; host rewrites on set_keys
+// ─────────────────────────────────────────────────────────────
+const TWEAKS = /*EDITMODE-BEGIN*/{
+  "accent": "terracotta",
+  "density": "mixed",
+  "readerTheme": "light",
+  "readerFont": "serif",
+  "readerSize": 18
+}/*EDITMODE-END*/;
+
+function useTweaks() {
+  const [t, setT] = React.useState(TWEAKS);
+  const [editing, setEditing] = React.useState(false);
+
+  React.useEffect(() => {
+    function onMsg(e) {
+      const d = e.data || {};
+      if (d.type === '__activate_edit_mode') setEditing(true);
+      if (d.type === '__deactivate_edit_mode') setEditing(false);
+    }
+    window.addEventListener('message', onMsg);
+    window.parent.postMessage({ type: '__edit_mode_available' }, '*');
+    return () => window.removeEventListener('message', onMsg);
+  }, []);
+
+  function set(key, value) {
+    setT(prev => ({ ...prev, [key]: value }));
+    window.parent.postMessage({
+      type: '__edit_mode_set_keys',
+      edits: { [key]: value },
+    }, '*');
+  }
+  return { t, editing, set };
+}
+
+const ACCENT_OPTIONS = {
+  terracotta: REED.terracotta,
+  plum: REED.plum,
+  olive: REED.olive,
+  ink: REED.ink,
+};
+
+function TweakPanel({ t, set }) {
+  const Row = ({ label, children }) => (
+    <div style={{ marginBottom: 14 }}>
+      <div style={{
+        fontFamily: REED.mono, fontSize: 10, letterSpacing: 0.6,
+        color: REED.inkFaint, textTransform: 'uppercase', marginBottom: 6,
+      }}>{label}</div>
+      {children}
+    </div>
+  );
+  const Pill = ({ on, onClick, children }) => (
+    <button onClick={onClick} style={{
+      padding: '5px 12px', borderRadius: 999, cursor: 'pointer',
+      fontFamily: REED.sans, fontSize: 11, fontWeight: 500,
+      background: on ? REED.ink : 'transparent',
+      color: on ? '#fff' : REED.inkMuted,
+      border: `1px solid ${on ? REED.ink : REED.rule}`,
+    }}>{children}</button>
+  );
+  return (
+    <div style={{
+      position: 'fixed', bottom: 24, right: 24, width: 280, zIndex: 1000,
+      background: REED.paperRaised, borderRadius: REED.r.lg, padding: 18,
+      border: `1px solid ${REED.rule}`,
+      boxShadow: '0 10px 40px rgba(0,0,0,0.15), 0 2px 6px rgba(0,0,0,0.06)',
+      fontFamily: REED.sans,
+    }}>
+      <div style={{
+        fontFamily: REED.display, fontSize: 18, fontWeight: 600,
+        letterSpacing: -0.3, marginBottom: 14, display: 'flex', alignItems: 'center', gap: 8,
+      }}>
+        <span style={{ color: REED.terracotta }}>✦</span>
+        Tweaks
+      </div>
+
+      <Row label="accent">
+        <div style={{ display: 'flex', gap: 8 }}>
+          {Object.entries(ACCENT_OPTIONS).map(([k, c]) => (
+            <button key={k} onClick={() => set('accent', k)} title={k} style={{
+              width: 28, height: 28, borderRadius: '50%', cursor: 'pointer',
+              background: c,
+              border: `2px solid ${t.accent === k ? REED.ink : 'transparent'}`,
+              boxShadow: '0 1px 2px rgba(0,0,0,0.1)',
+            }}/>
+          ))}
+        </div>
+      </Row>
+
+      <Row label="library density">
+        <div style={{ display: 'flex', gap: 6 }}>
+          {['mixed', 'card', 'list'].map(d => (
+            <Pill key={d} on={t.density === d} onClick={() => set('density', d)}>{d}</Pill>
+          ))}
+        </div>
+      </Row>
+
+      <Row label="reader theme">
+        <div style={{ display: 'flex', gap: 6 }}>
+          {['light', 'sepia', 'dark'].map(th => (
+            <Pill key={th} on={t.readerTheme === th} onClick={() => set('readerTheme', th)}>{th}</Pill>
+          ))}
+        </div>
+      </Row>
+
+      <Row label="reader font">
+        <div style={{ display: 'flex', gap: 6 }}>
+          {['serif', 'sans'].map(f => (
+            <Pill key={f} on={t.readerFont === f} onClick={() => set('readerFont', f)}>{f}</Pill>
+          ))}
+        </div>
+      </Row>
+
+      <Row label={`reader size · ${t.readerSize}px`}>
+        <input type="range" min={14} max={22} value={t.readerSize}
+          onChange={e => set('readerSize', Number(e.target.value))}
+          style={{ width: '100%', accentColor: REED.terracotta }}/>
+      </Row>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// Framed wrappers
+// ─────────────────────────────────────────────────────────────
+function DesktopFrame({ w = 1280, h = 820, children, label }) {
+  return (
+    <div style={{
+      width: w, height: h, borderRadius: 14, overflow: 'hidden',
+      background: '#fff', position: 'relative',
+      boxShadow: '0 30px 60px rgba(0,0,0,0.12), 0 6px 16px rgba(0,0,0,0.08)',
+    }}>
+      {/* traffic-light chrome */}
+      <div style={{
+        height: 36, background: '#EDE8DC',
+        borderBottom: '1px solid rgba(0,0,0,0.08)',
+        display: 'flex', alignItems: 'center', gap: 8, padding: '0 14px',
+      }}>
+        <div style={{ display: 'flex', gap: 7 }}>
+          <span style={{ width: 12, height: 12, borderRadius: '50%', background: '#F2675F' }}/>
+          <span style={{ width: 12, height: 12, borderRadius: '50%', background: '#F5BD4F' }}/>
+          <span style={{ width: 12, height: 12, borderRadius: '50%', background: '#61C454' }}/>
+        </div>
+        <div style={{
+          flex: 1, textAlign: 'center',
+          fontFamily: REED.mono, fontSize: 11, color: REED.inkMuted,
+          letterSpacing: 0.3,
+        }}>{label || 'localhost:5173 · BrowseFellow'}</div>
+      </div>
+      <div style={{ height: `calc(100% - 36px)`, overflow: 'hidden' }}>{children}</div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// Router / Prototype
+// ─────────────────────────────────────────────────────────────
+function LibraryPrototype({ density, onOpen }) {
+  return <Library density={density} onOpen={onOpen}/>;
+}
+
+function DesktopApp({ tweaks }) {
+  const [route, setRoute] = React.useState(() => {
+    const saved = localStorage.getItem('reed.route');
+    if (saved) { try { return JSON.parse(saved); } catch (e) {} }
+    return { name: 'library' };
+  });
+  React.useEffect(() => {
+    localStorage.setItem('reed.route', JSON.stringify(route));
+  }, [route]);
+
+  if (route.name === 'reader') {
+    return (
+      <Reader
+        articleId={route.articleId}
+        embedded
+        theme={tweaks.readerTheme}
+        fontKind={tweaks.readerFont}
+        size={tweaks.readerSize}
+        onBack={() => setRoute({ name: 'library' })}
+      />
+    );
+  }
+  return (
+    <Library
+      density={tweaks.density}
+      onOpen={(id) => setRoute({ name: 'reader', articleId: id })}
+    />
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// Top-level canvas
+// ─────────────────────────────────────────────────────────────
+function App() {
+  const { t, editing, set } = useTweaks();
+
+  return (
+    <>
+      <DesignCanvas>
+        <DCSection id="intro" title="BrowseFellow — warm reader"
+          subtitle="A read-it-later that's calmer and more curious than Pocket. Reader + Chat + Research agent, with matching mobile + extension.">
+          <DCArtboard id="moodboard" label="System" width={640} height={780}>
+            <Moodboard/>
+          </DCArtboard>
+          <DCArtboard id="wordmark" label="Brand" width={640} height={780}>
+            <BrandCard/>
+          </DCArtboard>
+        </DCSection>
+
+        <DCSection id="desktop" title="Desktop"
+          subtitle="Library → Reader. Chat and Research panels open to the right of the article.">
+          <DCArtboard id="library" label="01 · Library" width={1280} height={820}>
+            <DesktopFrame label="localhost:5173 · BrowseFellow — shelf">
+              <LibraryPrototype density={t.density}
+                onOpen={() => {}} />
+            </DesktopFrame>
+          </DCArtboard>
+          <DCArtboard id="reader" label="02 · Reader" width={1280} height={820}>
+            <DesktopFrame label="localhost:5173 · BrowseFellow — reading">
+              <Reader articleId={1} embedded
+                theme={t.readerTheme} fontKind={t.readerFont} size={t.readerSize}
+                onBack={() => {}} />
+            </DesktopFrame>
+          </DCArtboard>
+          <DCArtboard id="reader-chat" label="03 · Chat with article" width={1280} height={820}>
+            <DesktopFrame label="localhost:5173 · BrowseFellow — chat">
+              <ReaderWithPanel panel="chat" tweaks={t}/>
+            </DesktopFrame>
+          </DCArtboard>
+          <DCArtboard id="reader-research" label="04 · Research agent" width={1280} height={820}>
+            <DesktopFrame label="localhost:5173 · BrowseFellow — research">
+              <ReaderWithPanel panel="research" tweaks={t}/>
+            </DesktopFrame>
+          </DCArtboard>
+          <DCArtboard id="prototype" label="05 · Clickable prototype" width={1280} height={820}>
+            <DesktopFrame label="localhost:5173 · BrowseFellow">
+              <DesktopApp tweaks={t}/>
+            </DesktopFrame>
+          </DCArtboard>
+        </DCSection>
+
+        <DCSection id="mobile" title="iOS"
+          subtitle="Capacitor shell. Same vocabulary, one column, bottom sheet panels.">
+          <DCArtboard id="m-library" label="Shelf" width={430} height={900}>
+            <IOSDevice width={402} height={874}>
+              <MobileLibrary/>
+            </IOSDevice>
+          </DCArtboard>
+          <DCArtboard id="m-reader" label="Reader" width={430} height={900}>
+            <IOSDevice width={402} height={874}>
+              <MobileReader articleId={1}/>
+            </IOSDevice>
+          </DCArtboard>
+          <DCArtboard id="m-chat" label="Chat sheet" width={430} height={900}>
+            <IOSDevice width={402} height={874}>
+              <MobileReader articleId={1} initialPanel="chat"/>
+            </IOSDevice>
+          </DCArtboard>
+        </DCSection>
+
+        <DCSection id="ext" title="Chrome Extension"
+          subtitle="The save moment. Minimal, warm, immediate.">
+          <DCArtboard id="popup" label="Save popup" width={520} height={640}>
+            <ExtensionContextFrame>
+              <ExtensionPopup/>
+            </ExtensionContextFrame>
+          </DCArtboard>
+          <DCArtboard id="save-flow" label="Save → shelf flow (animated)" width={1100} height={700}>
+            <SaveFlow autoplay={true}/>
+          </DCArtboard>
+        </DCSection>
+
+        <DCSection id="agent" title="The Research agent, up close"
+          subtitle="Trace verbosity modes + what happens when a tool fails or the network drops.">
+          <DCArtboard id="trace-modes" label="Trace modes · Compact / Expanded / Thinking" width={1200} height={560}>
+            <TraceVariations/>
+          </DCArtboard>
+          <DCArtboard id="error-trace" label="Tool failure (Tavily 401)" width={700} height={620}>
+            <ErrorTrace/>
+          </DCArtboard>
+          <DCArtboard id="offline" label="Offline reader" width={1280} height={820}>
+            <DesktopFrame label="localhost:5173 · BrowseFellow — offline">
+              <OfflineReader/>
+            </DesktopFrame>
+          </DCArtboard>
+        </DCSection>
+
+        <DCSection id="settings" title="Settings"
+          subtitle="Agent config, tools, keys, storage — local-first, opinionated defaults.">
+          <DCArtboard id="settings-agent" label="Agent" width={1280} height={820}>
+            <DesktopFrame label="localhost:5173 · BrowseFellow — settings">
+              <Settings initialTab="agent"/>
+            </DesktopFrame>
+          </DCArtboard>
+          <DCArtboard id="settings-tools" label="Tools" width={1280} height={820}>
+            <DesktopFrame label="localhost:5173 · BrowseFellow — settings / tools">
+              <Settings initialTab="tools"/>
+            </DesktopFrame>
+          </DCArtboard>
+          <DCArtboard id="settings-storage" label="Storage + export" width={1280} height={820}>
+            <DesktopFrame label="localhost:5173 · BrowseFellow — settings / storage">
+              <Settings initialTab="storage"/>
+            </DesktopFrame>
+          </DCArtboard>
+          <DCArtboard id="settings-keys" label="API keys" width={1280} height={820}>
+            <DesktopFrame label="localhost:5173 · BrowseFellow — settings / keys">
+              <Settings initialTab="keys"/>
+            </DesktopFrame>
+          </DCArtboard>
+        </DCSection>
+
+        <DCSection id="tags" title="Tags & collections"
+          subtitle="Tags come from the agent. You can accept, reject, or write your own. Collections are saved filters.">
+          <DCArtboard id="tags-view" label="All tags + collections" width={1280} height={820}>
+            <DesktopFrame label="localhost:5173 · BrowseFellow — tags">
+              <TagsView/>
+            </DesktopFrame>
+          </DCArtboard>
+          <DCArtboard id="auto-tag" label="Auto-tag review (after save)" width={600} height={620}>
+            <AutoTagReview/>
+          </DCArtboard>
+        </DCSection>
+
+        <DCSection id="search" title="Search"
+          subtitle="Keyword (FTS5) + semantic (local embeddings). Both run against your library. 'Ask your library' is the one-step agent.">
+          <DCArtboard id="search-view" label="Search — semantic mode + ask" width={1280} height={820}>
+            <DesktopFrame label="localhost:5173 · BrowseFellow — search">
+              <SearchView/>
+            </DesktopFrame>
+          </DCArtboard>
+        </DCSection>
+
+        <DCSection id="highlights" title="Highlights & annotations"
+          subtitle="Select text in the reader. Highlight, note, ask the agent, copy. Everything lands in one roll.">
+          <DCArtboard id="highlight-reader" label="Reader — selection + margin notes" width={1280} height={820}>
+            <DesktopFrame label="localhost:5173 · BrowseFellow — reading">
+              <HighlightReader/>
+            </DesktopFrame>
+          </DCArtboard>
+          <DCArtboard id="all-highlights" label="All highlights" width={1280} height={820}>
+            <DesktopFrame label="localhost:5173 · BrowseFellow — highlights">
+              <HighlightsView/>
+            </DesktopFrame>
+          </DCArtboard>
+        </DCSection>
+
+        <DCSection id="agent-loop" title="Agent loop — live"
+          subtitle="The prototype's research panel talks to window.claude. Left: the runAgent() trace that matches the repo's loop shape. Right: what the user sees.">
+          <DCArtboard id="agent-real" label="Loop ↔ rendered answer" width={1100} height={720}>
+            <RealAgentLoop/>
+          </DCArtboard>
+        </DCSection>
+
+        <DCSection id="empty" title="First run"
+          subtitle="An empty shelf should feel like a welcome, not a void.">
+          <DCArtboard id="empty-shelf" label="Empty shelf · first-run" width={1280} height={820}>
+            <DesktopFrame label="localhost:5173 · BrowseFellow">
+              <EmptyShelf/>
+            </DesktopFrame>
+          </DCArtboard>
+        </DCSection>
+      </DesignCanvas>
+
+      {editing && <TweakPanel t={t} set={set}/>}
+    </>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// Helpers
+// ─────────────────────────────────────────────────────────────
+function ReaderWithPanel({ panel, tweaks }) {
+  return (
+    <Reader articleId={1} embedded initialPanel={panel}
+      theme={tweaks.readerTheme} fontKind={tweaks.readerFont} size={tweaks.readerSize}
+      onBack={() => {}}/>
+  );
+}
+
+function ExtensionContextFrame({ children }) {
+  // Mock: a browser chrome with the popup anchored to the toolbar button
+  return (
+    <div style={{
+      width: '100%', height: '100%', background: '#E8E5DE',
+      borderRadius: 12, overflow: 'hidden', position: 'relative',
+      boxShadow: '0 20px 50px rgba(0,0,0,0.12)',
+    }}>
+      {/* Browser chrome */}
+      <div style={{
+        height: 64, background: '#F5F2EA', borderBottom: '1px solid rgba(0,0,0,0.08)',
+        display: 'flex', alignItems: 'center', padding: '0 16px', gap: 10,
+      }}>
+        <div style={{ display: 'flex', gap: 7 }}>
+          <span style={{ width: 12, height: 12, borderRadius: '50%', background: '#F2675F' }}/>
+          <span style={{ width: 12, height: 12, borderRadius: '50%', background: '#F5BD4F' }}/>
+          <span style={{ width: 12, height: 12, borderRadius: '50%', background: '#61C454' }}/>
+        </div>
+        <div style={{
+          flex: 1, maxWidth: 360, height: 32, borderRadius: 16,
+          background: '#fff', border: '1px solid rgba(0,0,0,0.08)',
+          padding: '0 14px', display: 'flex', alignItems: 'center',
+          fontFamily: REED.mono, fontSize: 11, color: REED.inkMuted,
+        }}>emergencemagazine.org/essay/the-long-boundary</div>
+        <div style={{ flex: 1 }}/>
+        {/* extension button */}
+        <div style={{
+          width: 30, height: 30, borderRadius: 8,
+          background: REED.terracotta, display: 'flex', alignItems: 'center',
+          justifyContent: 'center', color: '#fff',
+          fontFamily: REED.display, fontSize: 16, fontWeight: 700,
+          boxShadow: '0 0 0 3px rgba(217,98,70,0.18)',
+        }}>BF</div>
+      </div>
+      {/* the popup anchored below the button */}
+      <div style={{
+        position: 'absolute', top: 74, right: 14,
+        borderRadius: 12, overflow: 'hidden',
+        boxShadow: '0 20px 40px rgba(0,0,0,0.18), 0 4px 10px rgba(0,0,0,0.08)',
+        border: '1px solid rgba(0,0,0,0.08)',
+      }}>
+        {children}
+      </div>
+      {/* dim page below */}
+      <div style={{
+        position: 'absolute', top: 64, left: 0, right: 0, bottom: 0,
+        background: '#F1EDE2',
+        backgroundImage: `repeating-linear-gradient(
+          0deg, rgba(0,0,0,0.02) 0, rgba(0,0,0,0.02) 1px, transparent 1px, transparent 4px
+        )`,
+      }}/>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// Moodboard + Brand cards
+// ─────────────────────────────────────────────────────────────
+function Moodboard() {
+  const swatches = [
+    ['Paper',      REED.paper,       REED.ink],
+    ['Paper deep', REED.paperDeep,   REED.ink],
+    ['Ink',        REED.ink,         '#fff'],
+    ['Terracotta', REED.terracotta,  '#fff'],
+    ['Olive',      REED.olive,       '#fff'],
+    ['Plum',       REED.plum,        '#fff'],
+  ];
+  return (
+    <div style={{
+      width: '100%', height: '100%', padding: 36, background: REED.paper,
+      backgroundImage: PAPER_NOISE, backgroundSize: '240px',
+      fontFamily: REED.sans, color: REED.ink, overflow: 'auto',
+    }}>
+      <div style={{
+        fontFamily: REED.mono, fontSize: 10, letterSpacing: 1,
+        textTransform: 'uppercase', color: REED.terracotta, marginBottom: 10,
+      }}>— system —</div>
+      <div style={{
+        fontFamily: REED.display, fontSize: 44, fontWeight: 600,
+        letterSpacing: -1.2, lineHeight: 1.05, marginBottom: 10,
+        textWrap: 'balance',
+      }}>Calm paper.<br/><span style={{ fontStyle: 'italic', color: REED.terracotta }}>Quiet agents.</span></div>
+      <div style={{
+        fontFamily: REED.display, fontSize: 16, fontStyle: 'italic',
+        color: REED.inkMuted, marginBottom: 28, maxWidth: 480, lineHeight: 1.5,
+        textWrap: 'pretty',
+      }}>A reading tool that feels like a studio, not a feed. Warm cream paper, editorial Source Serif for voice, Inter for UI, JetBrains Mono for machine whispers.</div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginBottom: 28 }}>
+        {swatches.map(([name, bg, fg]) => (
+          <div key={name} style={{
+            aspectRatio: '1.4', borderRadius: REED.r.md, background: bg,
+            padding: 12, display: 'flex', flexDirection: 'column',
+            justifyContent: 'space-between', color: fg,
+            border: bg.startsWith('#F') || bg.startsWith('#E') ? `1px solid ${REED.rule}` : 'none',
+          }}>
+            <div style={{ fontFamily: REED.mono, fontSize: 9, opacity: 0.8 }}>{bg}</div>
+            <div style={{ fontFamily: REED.display, fontSize: 17, fontWeight: 500 }}>{name}</div>
+          </div>
+        ))}
+      </div>
+
+      <div style={{
+        fontFamily: REED.mono, fontSize: 10, letterSpacing: 1,
+        textTransform: 'uppercase', color: REED.inkFaint, marginBottom: 8,
+      }}>type</div>
+      <div style={{
+        padding: '14px 0', borderTop: `1px solid ${REED.rule}`,
+        borderBottom: `1px dashed ${REED.rule}`, marginBottom: 10,
+      }}>
+        <div style={{ fontFamily: REED.display, fontSize: 44, fontWeight: 600, letterSpacing: -1, lineHeight: 1 }}>Source Serif 4</div>
+        <div style={{ fontFamily: REED.mono, fontSize: 10, color: REED.inkFaint, marginTop: 4 }}>display · body (reading mode)</div>
+      </div>
+      <div style={{ padding: '10px 0', borderBottom: `1px dashed ${REED.rule}`, marginBottom: 10 }}>
+        <div style={{ fontFamily: REED.sans, fontSize: 22, fontWeight: 500 }}>Inter — the UI voice</div>
+        <div style={{ fontFamily: REED.mono, fontSize: 10, color: REED.inkFaint, marginTop: 4 }}>ui · labels · chat</div>
+      </div>
+      <div style={{ padding: '10px 0' }}>
+        <div style={{ fontFamily: REED.mono, fontSize: 14, letterSpacing: 0.3 }}>jetbrains mono → tool_call(name="search_library")</div>
+        <div style={{ fontFamily: REED.mono, fontSize: 10, color: REED.inkFaint, marginTop: 4 }}>machine · metadata · traces</div>
+      </div>
+    </div>
+  );
+}
+
+function BrandCard() {
+  return (
+    <div style={{
+      width: '100%', height: '100%', padding: 36, background: REED.paperDeep,
+      backgroundImage: PAPER_NOISE, backgroundSize: '240px',
+      fontFamily: REED.sans, color: REED.ink, overflow: 'auto',
+      display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
+    }}>
+      <div>
+        <div style={{
+          fontFamily: REED.mono, fontSize: 10, letterSpacing: 1,
+          textTransform: 'uppercase', color: REED.terracotta, marginBottom: 10,
+        }}>— wordmark —</div>
+        <div style={{
+          display: 'flex', alignItems: 'baseline', gap: 6,
+          marginBottom: 32,
+        }}>
+          <span style={{
+            fontFamily: REED.display, fontSize: 96, fontWeight: 600,
+            lineHeight: 1, letterSpacing: -3.5, color: REED.ink,
+          }}>BrowseFellow</span>
+          <span style={{
+            width: 18, height: 18, borderRadius: '50%', background: REED.terracotta,
+            marginLeft: 4, transform: 'translateY(-10px)',
+          }}/>
+        </div>
+        <div style={{
+          fontFamily: REED.display, fontSize: 20, fontStyle: 'italic',
+          color: REED.inkMuted, lineHeight: 1.5, maxWidth: 460, textWrap: 'pretty',
+        }}>The read-it-later for people who actually read. One shelf, one quiet reader, one curious agent.</div>
+      </div>
+
+      <div style={{
+        padding: '20px 22px', background: REED.paperRaised, borderRadius: REED.r.lg,
+        border: `1px solid ${REED.rule}`,
+      }}>
+        <div style={{
+          fontFamily: REED.mono, fontSize: 10, letterSpacing: 0.5,
+          textTransform: 'uppercase', color: REED.inkFaint, marginBottom: 6,
+        }}>principles</div>
+        <ol style={{ margin: 0, paddingLeft: 20, fontFamily: REED.display, fontSize: 15, lineHeight: 1.7, color: REED.ink }}>
+          <li><em>Local first.</em> Your library is on your disk. The agent asks permission.</li>
+          <li><em>Paper first.</em> The reader is the product. Everything else defers to it.</li>
+          <li><em>Cite everything.</em> The agent never asserts without a source.</li>
+          <li><em>Few moods, not many.</em> Light, sepia, dark. No accent explosion.</li>
+        </ol>
+      </div>
+    </div>
+  );
+}
+
+// Mount
+const root = ReactDOM.createRoot(document.getElementById('root'));
+root.render(<App/>);
+</script>
+</body>
+</html>

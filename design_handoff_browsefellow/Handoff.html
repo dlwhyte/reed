@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BrowseFellow — Handoff</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,500;0,8..60,600;0,8..60,700;1,8..60,400;1,8..60,600&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper: #F8F1E4;
+    --paper-deep: #F2E8D3;
+    --paper-raised: #FDF8EC;
+    --ink: #2B2320;
+    --ink-muted: #7A6B5F;
+    --ink-faint: #B3A594;
+    --rule: #E3D6BE;
+    --terracotta: oklch(0.65 0.12 40);
+    --terracotta-soft: oklch(0.9 0.05 40);
+    --olive: oklch(0.55 0.08 130);
+    --olive-soft: oklch(0.92 0.04 130);
+    --plum: oklch(0.52 0.08 340);
+    --plum-soft: oklch(0.93 0.04 340);
+    --butter: #F2D5B8;
+    --serif: 'Source Serif 4', Georgia, serif;
+    --sans: 'Inter', -apple-system, sans-serif;
+    --mono: 'JetBrains Mono', ui-monospace, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--paper); color: var(--ink); font-family: var(--sans); }
+  body { background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='240' height='240'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2'/><feColorMatrix values='0 0 0 0 0.9  0 0 0 0 0.85  0 0 0 0 0.75  0 0 0 0.04 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>"); }
+  main { max-width: 920px; margin: 0 auto; padding: 60px 48px 120px; }
+  a { color: var(--terracotta); }
+  code, pre { font-family: var(--mono); font-size: 12.5px; }
+  pre { background: #2B2320; color: #E9DFCB; padding: 16px 18px; border-radius: 10px; overflow-x: auto; line-height: 1.6; }
+  pre .k { color: oklch(0.72 0.1 340); }
+  pre .s { color: oklch(0.8 0.1 60); }
+  pre .c { color: #7A6B5F; font-style: italic; }
+  h1, h2, h3 { font-family: var(--serif); letter-spacing: -0.5px; text-wrap: balance; }
+  h1 { font-size: 54px; font-weight: 600; letter-spacing: -1.5px; line-height: 1.02; margin: 0 0 12px; }
+  h1 em { color: var(--terracotta); font-style: italic; font-weight: 600; }
+  h2 { font-size: 28px; font-weight: 600; margin: 56px 0 14px; border-top: 1px solid var(--rule); padding-top: 40px; }
+  h3 { font-size: 18px; font-weight: 600; margin: 22px 0 8px; }
+  p, li { font-size: 15px; line-height: 1.65; text-wrap: pretty; }
+  .lede { font-family: var(--serif); font-style: italic; font-size: 20px; color: var(--ink-muted); line-height: 1.5; max-width: 620px; }
+  .kicker { font-family: var(--mono); font-size: 10px; text-transform: uppercase; letter-spacing: 1.2px; color: var(--terracotta); margin-bottom: 8px; }
+  .wordmark { font-family: var(--serif); font-size: 32px; font-weight: 600; letter-spacing: -1.5px; display: inline-flex; align-items: baseline; gap: 3px; }
+  .wordmark::after { content: ''; display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--terracotta); transform: translateY(-14px); margin-left: 2px; }
+  .swatches { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 20px 0; }
+  .sw { aspect-ratio: 1.4; border-radius: 10px; padding: 10px; display: flex; flex-direction: column; justify-content: space-between; font-family: var(--mono); font-size: 10px; border: 1px solid var(--rule); }
+  .card { padding: 18px 22px; border-radius: 14px; background: var(--paper-raised); border: 1px solid var(--rule); margin: 14px 0; }
+  .card .hd { font-family: var(--mono); font-size: 10px; letter-spacing: 0.6px; text-transform: uppercase; color: var(--ink-faint); margin-bottom: 6px; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .pill { display: inline-block; padding: 3px 10px; border-radius: 999px; font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.3px; border: 1px solid var(--rule); background: var(--paper-raised); color: var(--ink-muted); }
+  .pill.tc { color: var(--terracotta); border-color: var(--terracotta); background: var(--terracotta-soft); }
+  .pill.ol { color: var(--olive); border-color: var(--olive); background: var(--olive-soft); }
+  .pill.pl { color: var(--plum); border-color: var(--plum); background: var(--plum-soft); }
+  table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 13.5px; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+  th { font-family: var(--mono); font-size: 10px; letter-spacing: 0.6px; text-transform: uppercase; color: var(--ink-faint); font-weight: 500; }
+  td code { background: var(--paper-deep); padding: 2px 6px; border-radius: 4px; font-size: 11.5px; }
+  blockquote { margin: 14px 0; padding: 12px 18px; border-left: 3px solid var(--terracotta); font-family: var(--serif); font-style: italic; color: var(--ink-muted); font-size: 16px; line-height: 1.55; }
+  .toc { columns: 2; column-gap: 30px; padding: 18px 22px; background: var(--paper-raised); border: 1px solid var(--rule); border-radius: 12px; font-size: 13.5px; }
+  .toc a { text-decoration: none; color: var(--ink); display: block; padding: 3px 0; }
+  .toc a:hover { color: var(--terracotta); }
+  .toc .num { font-family: var(--mono); font-size: 10.5px; color: var(--ink-faint); margin-right: 8px; }
+  .link { display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; border-radius: 999px; background: var(--ink); color: var(--paper); text-decoration: none; font-family: var(--sans); font-size: 13px; font-weight: 500; margin-right: 6px; margin-top: 4px; }
+  .link.ghost { background: transparent; color: var(--ink); border: 1px solid var(--rule); }
+</style>
+</head>
+<body>
+<main>
+  <div class="wordmark">BrowseFellow</div>
+  <div class="kicker" style="margin-top: 18px">— handoff · v1.0 —</div>
+  <h1>BrowseFellow, for <em>builders.</em></h1>
+  <p class="lede">This is the engineering-side companion to the design canvas. Tokens, components, behavior, and the few places where the prototype deliberately takes a position.</p>
+
+  <div style="margin-top: 22px;">
+    <a class="link" href="BrowseFellow.html">↗ Open the prototype</a>
+    <a class="link ghost" href="components/tokens.jsx">tokens.jsx</a>
+    <a class="link ghost" href="components/reader.jsx">reader.jsx</a>
+    <a class="link ghost" href="components/panels.jsx">panels.jsx</a>
+  </div>
+
+  <h2 id="toc" style="border: none; padding-top: 28px;">Contents</h2>
+  <div class="toc">
+    <a href="#principles"><span class="num">01</span>Principles</a>
+    <a href="#tokens"><span class="num">02</span>Design tokens</a>
+    <a href="#type"><span class="num">03</span>Type</a>
+    <a href="#architecture"><span class="num">04</span>File architecture</a>
+    <a href="#components"><span class="num">05</span>Components</a>
+    <a href="#agent"><span class="num">06</span>Agent loop</a>
+    <a href="#tweaks"><span class="num">07</span>Tweaks</a>
+    <a href="#states"><span class="num">08</span>States to handle</a>
+    <a href="#open"><span class="num">09</span>Open questions</a>
+  </div>
+
+  <h2 id="principles">01 · Principles</h2>
+  <blockquote>Paper first. Local first. Cite everything. Few moods, not many.</blockquote>
+  <p>These aren't decoration. They're constraints. <b>Paper first</b> means the reader is the product — every other surface defers to it in contrast, density, and weight. <b>Local first</b> means the shelf lives on disk; the agent asks permission to leave it. <b>Cite everything</b> means the agent never asserts without a source. <b>Few moods</b> means three reader themes (light, sepia, dark) and four accents, period. No theme shop.</p>
+
+  <h2 id="tokens">02 · Design tokens</h2>
+  <p>All tokens live in <code>components/tokens.jsx</code> under the <code>REED</code> object. They're global so every component can read them without prop-drilling. If you port to CSS custom properties, use the same names.</p>
+
+  <h3>Paper & ink</h3>
+  <div class="swatches">
+    <div class="sw" style="background:#F8F1E4">paper<br/><b style="font-family:var(--mono)">#F8F1E4</b></div>
+    <div class="sw" style="background:#F2E8D3">paperDeep<br/><b style="font-family:var(--mono)">#F2E8D3</b></div>
+    <div class="sw" style="background:#FDF8EC">paperRaised<br/><b style="font-family:var(--mono)">#FDF8EC</b></div>
+    <div class="sw" style="background:#E3D6BE">rule<br/><b style="font-family:var(--mono)">#E3D6BE</b></div>
+    <div class="sw" style="background:#2B2320;color:#F0E6D5;border:none">ink<br/><b style="font-family:var(--mono)">#2B2320</b></div>
+    <div class="sw" style="background:#7A6B5F;color:#F0E6D5;border:none">inkMuted<br/><b style="font-family:var(--mono)">#7A6B5F</b></div>
+    <div class="sw" style="background:#B3A594;color:#fff;border:none">inkFaint<br/><b style="font-family:var(--mono)">#B3A594</b></div>
+    <div class="sw" style="background:#F2D5B8">butter<br/><b style="font-family:var(--mono)">#F2D5B8</b></div>
+  </div>
+
+  <h3>Accents — semantic, not decorative</h3>
+  <table>
+    <tr><th>Token</th><th>Value</th><th>Use</th></tr>
+    <tr><td><span class="pill tc">terracotta</span></td><td><code>oklch(0.65 0.12 40)</code></td><td>Brand, primary CTAs, highlight chips, "just saved" signals</td></tr>
+    <tr><td><span class="pill ol">olive</span></td><td><code>oklch(0.55 0.08 130)</code></td><td>Research agent. Anywhere an agent is doing work, it's olive.</td></tr>
+    <tr><td><span class="pill pl">plum</span></td><td><code>oklch(0.52 0.08 340)</code></td><td>Chat. Distinguishes conversation from research.</td></tr>
+    <tr><td><span class="pill">ink</span></td><td><code>#2B2320</code></td><td>Body text. Also toolbar background, toast background.</td></tr>
+  </table>
+
+  <h3>Dark + sepia reader variants</h3>
+  <p>Only the reader themes. The chrome stays warm paper in all modes so you always know where you are. See <code>REED.dark</code> and <code>REED.sepia</code> in tokens.</p>
+
+  <h3>Radii + elevation</h3>
+  <table>
+    <tr><th>Token</th><th>Value</th><th>Where</th></tr>
+    <tr><td><code>r.sm</code></td><td>6px</td><td>Pills, small buttons, inline chips</td></tr>
+    <tr><td><code>r.md</code></td><td>10px</td><td>Swatches, tile cards</td></tr>
+    <tr><td><code>r.lg</code></td><td>14px</td><td>Panels, popovers, settings rows</td></tr>
+    <tr><td><code>r.xl</code></td><td>20px</td><td>Empty-state containers, hero cards</td></tr>
+  </table>
+  <p>Shadows are used <i>sparingly</i>. Paper is supposed to feel flat; only the active popover and the toast lift. If you reach for a shadow, try a 1px rule first.</p>
+
+  <h2 id="type">03 · Type</h2>
+  <div class="grid2">
+    <div class="card">
+      <div class="hd">display + body</div>
+      <div style="font-family: var(--serif); font-size: 36px; font-weight: 600; letter-spacing: -1px; line-height: 1.05;">Source Serif 4</div>
+      <p style="color: var(--ink-muted); margin: 8px 0 0;">Headlines, reader body (serif mode), dropcaps, blockquotes, italic voice text.</p>
+    </div>
+    <div class="card">
+      <div class="hd">ui voice</div>
+      <div style="font-family: var(--sans); font-size: 26px; font-weight: 500;">Inter</div>
+      <p style="color: var(--ink-muted); margin: 8px 0 0;">Labels, buttons, chat messages, navigation. Quietly functional.</p>
+    </div>
+    <div class="card" style="grid-column: 1 / -1">
+      <div class="hd">machine</div>
+      <div style="font-family: var(--mono); font-size: 18px;">tool_call(name="search_library", q="bookstores")</div>
+      <p style="color: var(--ink-muted); margin: 8px 0 0;">JetBrains Mono. Tool traces, metadata, timestamps, keyboard hints, URL bars — anything the machine said.</p>
+    </div>
+  </div>
+
+  <h2 id="architecture">04 · File architecture</h2>
+  <pre><span class="c">// Single-page React prototype (babel-standalone).</span>
+BrowseFellow.html         <span class="c">// entry; mounts &lt;App/&gt; + the Tweaks panel</span>
+design-canvas.jsx         <span class="c">// pan/zoom canvas with sections + artboards</span>
+ios-frame.jsx             <span class="c">// device bezel</span>
+components/
+  tokens.jsx              <span class="c">// REED, PAPER_NOISE, inkStamp — source of truth</span>
+  data.jsx                <span class="c">// SAMPLE_ARTICLES, sample shelf state</span>
+  primitives.jsx          <span class="c">// Icon, Wordmark, Cite, TypingDots, Dropcap</span>
+  library.jsx             <span class="c">// shelf (card | list | mixed density)</span>
+  reader.jsx              <span class="c">// Reader + Chat/Research toggle + theme wiring</span>
+  panels.jsx              <span class="c">// ChatPane, ResearchPane, Composer, Trace</span>
+  mobile.jsx              <span class="c">// MobileLibrary, MobileReader</span>
+  settings.jsx            <span class="c">// Agent/Tools/Storage/Keys tabs</span>
+  flows.jsx               <span class="c">// SaveFlow, EmptyShelf, OfflineReader, ErrorTrace, TraceVariations</span>
+  phase2.jsx              <span class="c">// Tags, Search, Highlights, RealAgentLoop</span></pre>
+
+  <p>Every component file exports to <code>window</code> at the end, because <code>&lt;script type="text/babel"&gt;</code> files don't share module scope. If you extract to a real build, the export pattern just becomes normal <code>export</code>s.</p>
+
+  <h2 id="components">05 · Components, in priority order</h2>
+  <h3>Reader <span class="pill">reader.jsx</span></h3>
+  <p>The product. A single article column (560–680px measure), a sticky toolbar on the right (Star / Chat / Research / Theme / Font), and a side panel that slides in for Chat or Research. The panel never covers the article — the article reflows.</p>
+  <ul>
+    <li>Body text is <code>clamp(16px, 1.15vw, 20px)</code> by default, tweakable 14–22.</li>
+    <li>Dropcap is Source Serif, terracotta, 4.6em, line-height 0.85. First paragraph only.</li>
+    <li>Blockquotes get a 2px terracotta left-rule and italic Source Serif. Not generic pull-quotes.</li>
+    <li>The TL;DR card is <code>REED.butter + '66'</code> (40% butter) with a serif italic inside. Dismissible in future iterations.</li>
+  </ul>
+
+  <h3>Library <span class="pill">library.jsx</span></h3>
+  <p>Three densities: <code>card</code>, <code>list</code>, <code>mixed</code>. Mixed is the default — big cover tile for the newest, list for the rest. Density is a Tweak because it's a genuine preference disagreement.</p>
+
+  <h3>Chat + Research panels <span class="pill">panels.jsx</span></h3>
+  <p>Both use <code>Composer</code>, both stream, but they're visually distinct: <span class="pill pl">plum</span> for Chat (conversational), <span class="pill ol">olive</span> for Research (industrial). The trace in Research is collapsed by default — the user is supposed to feel the answer, not the machinery.</p>
+
+  <h3>Agent trace <span class="pill">flows.jsx</span></h3>
+  <p>Three verbosity modes live in <code>TraceVariations</code>: Compact, Expanded (default), Thinking. The chosen mode is a user setting.</p>
+
+  <h2 id="agent">06 · Agent loop</h2>
+  <p>The prototype's Research panel and the <code>RealAgentLoop</code> artboard both call <code>window.claude.complete()</code> with a fallback for when the call fails. In the real app, this is where you wire Cohere:</p>
+  <pre><span class="k">async function</span> runAgent(query) {
+  <span class="k">const</span> turns = [];
+  <span class="k">while</span> (turns.length &lt; MAX_TURNS) {
+    <span class="k">const</span> response = <span class="k">await</span> cohere.chat({
+      model: <span class="s">'command-r-plus'</span>,
+      preamble: PREAMBLE,
+      tools: [search_library, read_article, search_web],
+      chat_history: turns,
+      message: query,
+    });
+    <span class="k">if</span> (response.tool_calls) {
+      <span class="k">for</span> (<span class="k">const</span> tc <span class="k">of</span> response.tool_calls) {
+        <span class="k">const</span> result = <span class="k">await</span> executeTool(tc);
+        turns.push({ role: <span class="s">'TOOL'</span>, tool_results: [{ call: tc, outputs: result }] });
+      }
+      <span class="k">continue</span>;
+    }
+    <span class="k">return</span> response; <span class="c">// final answer with citations</span>
+  }
+}</pre>
+  <p>Three tools ship at launch: <code>search_library</code> (SQLite FTS5 + optional local embeddings), <code>read_article</code> (pulls full text from the shelf), <code>search_web</code> (Tavily). All tool calls and results are rendered into the user-visible trace. No invisible tool use.</p>
+
+  <h2 id="tweaks">07 · Tweaks</h2>
+  <p>The Tweaks panel (bottom-right, toggled by the host) persists to an <code>EDITMODE-BEGIN/END</code> JSON block in <code>BrowseFellow.html</code>. Five keys:</p>
+  <table>
+    <tr><th>key</th><th>values</th><th>effect</th></tr>
+    <tr><td><code>accent</code></td><td>terracotta · plum · olive · ink</td><td>Primary accent across CTAs, highlights, the wordmark dot.</td></tr>
+    <tr><td><code>density</code></td><td>mixed · card · list</td><td>Library layout.</td></tr>
+    <tr><td><code>readerTheme</code></td><td>light · sepia · dark</td><td>Reader palette (chrome stays paper).</td></tr>
+    <tr><td><code>readerFont</code></td><td>serif · sans</td><td>Body font in the reader only.</td></tr>
+    <tr><td><code>readerSize</code></td><td>14 – 22</td><td>Reader body size in px.</td></tr>
+  </table>
+
+  <h2 id="states">08 · States engineers sometimes forget</h2>
+  <ul>
+    <li><b>First run.</b> Empty shelf should feel like a welcome, not a void — see <code>EmptyShelf</code>. Three onboarding paths (extension, paste URL, Pocket import) and three sample pieces.</li>
+    <li><b>Offline.</b> Reader works on cache. Chat + Research go to a gentle "the agent is sleeping" state. Do <i>not</i> block the reader behind a full-screen error.</li>
+    <li><b>Tool failure.</b> Inline in the trace, with three recovery buttons: Retry, Update key, Skip &amp; answer without web. See <code>ErrorTrace</code>.</li>
+    <li><b>Long save.</b> The extension popup shows the extraction progress, then the tag review. Don't close automatically — the user wants to confirm the tags.</li>
+    <li><b>Auto-tag disagreement.</b> Tags are proposed, not imposed. Users can reject; we remember corrections.</li>
+  </ul>
+
+  <h2 id="open">09 · Open questions for the team</h2>
+  <ol>
+    <li><b>Chat history.</b> Per-article only, or cross-article? Current prototype is per-article (the chat forgets on close).</li>
+    <li><b>Embeddings.</b> Local (nomic-embed-v2 via ONNX) or server-side? Local is in the wireframe but I haven't priced it against model size.</li>
+    <li><b>Highlights roll-up.</b> Is the "All highlights" view a timeline or a per-piece clustering? Prototype shows timeline.</li>
+    <li><b>Research trace by default.</b> Currently collapsed. Some users will want it expanded by default; should we detect (power user → expanded) or leave it in settings?</li>
+    <li><b>Import.</b> Pocket .json is in the empty-state CTA but not built. Priority?</li>
+  </ol>
+
+  <p style="margin-top: 56px; padding-top: 28px; border-top: 1px solid var(--rule); color: var(--ink-faint); font-family: var(--mono); font-size: 11px; letter-spacing: 0.4px;">
+    — BrowseFellow · handoff v1.0 · apr 2026 —
+  </p>
+</main>
+</body>
+</html>
