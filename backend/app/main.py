@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import json
 import asyncio
 from pathlib import Path
@@ -39,6 +41,11 @@ class UpdateReq(BaseModel):
 class ChatReq(BaseModel):
     question: str
     history: list[dict] = []
+
+
+class HighlightReq(BaseModel):
+    text: str
+    note: str | None = None
 
 
 @app.get("/api/health")
@@ -426,6 +433,63 @@ async def research(article_id: int, req: ChatReq):
         yield "data: [DONE]\n\n"
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
+
+
+@app.get("/api/articles/{article_id}/highlights")
+def list_article_highlights(article_id: int):
+    with db.connect() as conn:
+        rows = conn.execute(
+            """SELECT id, article_id, text, note, created_at
+               FROM highlights WHERE article_id = ?
+               ORDER BY id ASC""",
+            (article_id,),
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+@app.post("/api/articles/{article_id}/highlights")
+def create_highlight(article_id: int, req: HighlightReq):
+    text = (req.text or "").strip()
+    if not text:
+        raise HTTPException(400, "empty highlight")
+    with db.connect() as conn:
+        exists = conn.execute(
+            "SELECT 1 FROM articles WHERE id = ?", (article_id,)
+        ).fetchone()
+        if not exists:
+            raise HTTPException(404, "article not found")
+        cur = conn.execute(
+            "INSERT INTO highlights (article_id, text, note) VALUES (?, ?, ?)",
+            (article_id, text, req.note),
+        )
+        hid = cur.lastrowid
+        row = conn.execute(
+            "SELECT id, article_id, text, note, created_at FROM highlights WHERE id = ?",
+            (hid,),
+        ).fetchone()
+    return dict(row)
+
+
+@app.delete("/api/highlights/{highlight_id}")
+def delete_highlight(highlight_id: int):
+    with db.connect() as conn:
+        conn.execute("DELETE FROM highlights WHERE id = ?", (highlight_id,))
+    return {"ok": True}
+
+
+@app.get("/api/highlights")
+def list_all_highlights(limit: int = 200):
+    with db.connect() as conn:
+        rows = conn.execute(
+            """SELECT h.id, h.article_id, h.text, h.note, h.created_at,
+                      a.title AS article_title, a.site_name AS article_site,
+                      a.url AS article_url
+               FROM highlights h
+               JOIN articles a ON a.id = h.article_id
+               ORDER BY h.id DESC LIMIT ?""",
+            (limit,),
+        ).fetchall()
+    return [dict(r) for r in rows]
 
 
 @app.get("/api/config")

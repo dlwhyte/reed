@@ -5,6 +5,8 @@ Tools:
   - read_article(article_id): fetch a stored article's full content
   - search_web(query): Tavily web search (optional, requires TAVILY_API_KEY)
 """
+from __future__ import annotations
+
 import json
 from typing import AsyncIterator
 import httpx
