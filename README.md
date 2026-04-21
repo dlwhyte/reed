@@ -1,5 +1,7 @@
 # BrowseFellow
 
+[![CI](https://github.com/dlwhyte/reed/actions/workflows/ci.yml/badge.svg)](https://github.com/dlwhyte/reed/actions/workflows/ci.yml)
+
 A warm, editorial read-it-later app that runs on your Mac. Pocket-style clean reader with a **Cohere-powered research agent** that can search your shelf, read saved articles, and browse the web to dig into whatever you're reading.
 
 ## Why
@@ -27,6 +29,7 @@ Pocket shut down in July 2025. BrowseFellow is a local-first replacement: your d
 - Auto-summary (1-line + TL;DR) and auto-tags on save
 - Chat with any article — streaming, paragraph-cited
 - "Similar articles" via embedding cosine with similarity threshold
+- Local token counter in **Settings → Cohere usage** — today / this month / all-time, broken down by feature, with a $ estimate so there are no billing surprises
 
 **Research Companion agent**
 - Tool-using loop on Command A: `search_library`, `read_article`, `search_web`
@@ -36,7 +39,7 @@ Pocket shut down in July 2025. BrowseFellow is a local-first replacement: your d
 
 **Save from anywhere**
 - Desktop bookmarklet (Settings → Bookmarklet)
-- Chrome extension (toolbar icon + right-click context menu, `extension/`)
+- Chrome extension (toolbar icon + right-click context menu, `extension/`). For friends who access *your* instance via Tailscale / `browsefellow.com`, build a URL-rebranded zip with `scripts/build-friend-extension.sh <your-url>`.
 - iOS Shortcut for the Share Sheet (step-by-step guide in Settings)
 - **Import from Pocket** — drag a CSV export into Settings; BrowseFellow preserves tags and mirrors archived status
 
@@ -90,6 +93,20 @@ Open **http://localhost:5173**.
 ### Python 3.9 note
 
 BrowseFellow runs cleanly on macOS's stock Python (currently 3.9). The code uses modern type-union syntax (`str | None`), which 3.9 handles via `from __future__ import annotations` + `eval_type_backport` — both already wired up, no setup needed.
+
+### Tests
+
+Backend has a pytest suite covering save / list / patch / delete, FTS5 search, highlights, usage rollups, CORS allow/deny, SSRF guard, XSS escape, and the Cohere token-extraction helper:
+
+```bash
+cd backend
+pip install -r requirements-dev.txt
+pytest
+```
+
+All 18 tests run in under a second against a temp SQLite — no network, no Cohere calls. The same suite plus `pip-audit`, `npm audit`, `gitleaks`, and CodeQL runs on every push via GitHub Actions (see [CI](.github/workflows/ci.yml)).
+
+Deferred work is tracked in [`TODO.md`](TODO.md).
 
 ## Run on a fresh Mac
 
