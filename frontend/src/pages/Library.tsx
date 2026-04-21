@@ -334,7 +334,7 @@ function DensityToggle({
           className={clsx(
             "flex h-7 w-8 items-center justify-center rounded-[6px] font-sans text-[13px] transition-colors duration-150 ease-out",
             value === o.id
-              ? "bg-paper-raised text-ink shadow-sm"
+              ? "bg-ink text-paper"
               : "text-ink-faint hover:text-ink",
           )}
           aria-pressed={value === o.id}
