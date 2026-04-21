@@ -7,11 +7,11 @@
 
     <key>ProgramArguments</key>
     <array>
-        <string>/Users/dlwhyte/Jarvis/reader/backend/run.sh</string>
+        <string>__REED_ROOT__/backend/run.sh</string>
     </array>
 
     <key>WorkingDirectory</key>
-    <string>/Users/dlwhyte/Jarvis/reader/backend</string>
+    <string>__REED_ROOT__/backend</string>
 
     <key>RunAtLoad</key>
     <true/>
@@ -20,10 +20,10 @@
     <true/>
 
     <key>StandardOutPath</key>
-    <string>/Users/dlwhyte/Jarvis/reader/logs/reader.out.log</string>
+    <string>__REED_ROOT__/logs/reader.out.log</string>
 
     <key>StandardErrorPath</key>
-    <string>/Users/dlwhyte/Jarvis/reader/logs/reader.err.log</string>
+    <string>__REED_ROOT__/logs/reader.err.log</string>
 
     <key>EnvironmentVariables</key>
     <dict>
