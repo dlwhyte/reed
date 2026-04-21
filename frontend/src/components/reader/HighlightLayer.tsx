@@ -20,6 +20,10 @@ type Popover = {
   text: string;
 };
 
+const IS_TOUCH =
+  typeof window !== "undefined" &&
+  ("ontouchstart" in window || (navigator as any).maxTouchPoints > 0);
+
 export function HighlightLayer({
   paragraphs,
   highlights,
@@ -30,8 +34,11 @@ export function HighlightLayer({
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [popover, setPopover] = useState<Popover | null>(null);
+  const [touchSelection, setTouchSelection] = useState<string | null>(null);
 
   useEffect(() => {
+    if (IS_TOUCH) return;
+
     function onMouseUp() {
       const sel = window.getSelection();
       if (!sel || sel.isCollapsed) {
@@ -73,10 +80,52 @@ export function HighlightLayer({
     };
   }, []);
 
+  // Touch path — iOS/Android hijack `mouseup` and cover the selection with
+  // their own menu, so we track selection via `selectionchange` and surface a
+  // floating pill at the bottom of the viewport that coexists with the
+  // system menu instead of fighting it.
+  useEffect(() => {
+    if (!IS_TOUCH) return;
+
+    function update() {
+      const sel = window.getSelection();
+      if (!sel || sel.isCollapsed) {
+        setTouchSelection(null);
+        return;
+      }
+      const text = sel.toString().trim();
+      if (!text || text.length < 3) {
+        setTouchSelection(null);
+        return;
+      }
+      const container = containerRef.current;
+      if (!container) {
+        setTouchSelection(null);
+        return;
+      }
+      const range = sel.getRangeAt(0);
+      if (!container.contains(range.commonAncestorContainer)) {
+        setTouchSelection(null);
+        return;
+      }
+      setTouchSelection(text);
+    }
+
+    document.addEventListener("selectionchange", update);
+    return () => document.removeEventListener("selectionchange", update);
+  }, []);
+
   function commitHighlight() {
     if (!popover) return;
     onHighlight(popover.text);
     setPopover(null);
+    window.getSelection()?.removeAllRanges();
+  }
+
+  function commitTouchHighlight() {
+    if (!touchSelection) return;
+    onHighlight(touchSelection);
+    setTouchSelection(null);
     window.getSelection()?.removeAllRanges();
   }
 
@@ -109,6 +158,27 @@ export function HighlightLayer({
           >
             <Icon icon={Highlighter} size={13} />
             Highlight
+          </button>
+        </div>
+      )}
+
+      {IS_TOUCH && touchSelection && (
+        <div
+          data-bf-popover
+          className="fixed bottom-6 right-4 z-30 pb-safe"
+        >
+          <button
+            type="button"
+            aria-label="Highlight selection"
+            onTouchStart={(e) => {
+              // Prevent the browser from clearing the selection before
+              // `onClick` fires.
+              e.preventDefault();
+            }}
+            onClick={commitTouchHighlight}
+            className="inline-flex h-14 w-14 items-center justify-center rounded-full bg-butter text-ink shadow-modal ring-1 ring-ink/10 active:brightness-95"
+          >
+            <Icon icon={Highlighter} size={22} />
           </button>
         </div>
       )}
