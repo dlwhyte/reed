@@ -33,19 +33,11 @@ os.environ["READER_ALLOW_PRIVATE_URLS"] = "true"
 
 
 @pytest.fixture
-def client(monkeypatch):
-    """FastAPI TestClient with a clean SQLite + a seeded test user.
-
-    Bypasses Clerk JWT verification by overriding the `current_user` /
-    `current_user_or_bookmarklet` deps with a function that returns the
-    seeded row. Real JWT verification is exercised separately if/when we
-    add auth-specific tests.
+def db_setup(monkeypatch):
+    """Set up a fresh, isolated SQLite for one test and return a helper
+    that seeds users into it. Composed by `client`, `two_clients`, and
+    `raw_client` so they share schema setup but choose how to authenticate.
     """
-    from fastapi.testclient import TestClient
-
-    # Isolate this test's DB so state doesn't leak between tests. `db.py`
-    # imports DB_PATH at module load, so we have to patch it on both
-    # modules to keep them in sync.
     from app import config, db
 
     db_dir = tempfile.mkdtemp(prefix="reed-tests-db-")
@@ -53,23 +45,38 @@ def client(monkeypatch):
     monkeypatch.setattr(config, "DB_PATH", test_path)
     monkeypatch.setattr(db, "DB_PATH", test_path)
 
-    # Re-init schema against the fresh DB.
     db.init_db()
 
-    # Seed a single test user and surface it as the "current user" for
-    # every request.
-    with db.connect() as conn:
-        cur = conn.execute(
-            "INSERT INTO users (clerk_user_id, email, bookmarklet_token) "
-            "VALUES (?, ?, ?)",
-            ("test_user_clerk_id", "test@example.com", "test-bookmarklet-token"),
-        )
-        test_user = {
-            "id": cur.lastrowid,
-            "clerk_user_id": "test_user_clerk_id",
-            "email": "test@example.com",
-            "bookmarklet_token": "test-bookmarklet-token",
-        }
+    def seed_user(clerk_id: str, email: str, bookmarklet_token: str) -> dict:
+        with db.connect() as conn:
+            cur = conn.execute(
+                "INSERT INTO users (clerk_user_id, email, bookmarklet_token) "
+                "VALUES (?, ?, ?)",
+                (clerk_id, email, bookmarklet_token),
+            )
+            return {
+                "id": cur.lastrowid,
+                "clerk_user_id": clerk_id,
+                "email": email,
+                "bookmarklet_token": bookmarklet_token,
+            }
+
+    return seed_user
+
+
+@pytest.fixture
+def client(db_setup):
+    """FastAPI TestClient with a clean SQLite + a single seeded test user.
+
+    Bypasses Clerk JWT verification by overriding the `current_user` /
+    `current_user_or_bookmarklet` deps with a function that returns the
+    seeded row. Real auth-required behavior is exercised by `raw_client`.
+    """
+    from fastapi.testclient import TestClient
+
+    test_user = db_setup(
+        "test_user_clerk_id", "test@example.com", "test-bookmarklet-token"
+    )
 
     from app import auth
     from app.main import app
@@ -83,6 +90,60 @@ def client(monkeypatch):
         yield tc
     finally:
         app.dependency_overrides.clear()
+
+
+@pytest.fixture
+def two_clients(db_setup):
+    """Two TestClients, each impersonating a different user, sharing a
+    single fresh DB. Used to verify cross-user data isolation.
+
+    Yields (alice_client, bob_client). Each client routes its requests
+    through a per-request dep override so the two never see each other's
+    rows.
+    """
+    from fastapi.testclient import TestClient
+
+    alice = db_setup("alice_clerk", "alice@example.com", "alice-bookmarklet")
+    bob = db_setup("bob_clerk", "bob@example.com", "bob-bookmarklet")
+
+    from app import auth
+    from app.main import app
+
+    class UserClient(TestClient):
+        def __init__(self, user: dict):
+            super().__init__(app)
+            self.user = user
+
+        def request(self, *args, **kwargs):
+            # Re-bind the override on every request so two interleaved
+            # clients don't trample each other.
+            app.dependency_overrides[auth.current_user] = lambda u=self.user: u
+            app.dependency_overrides[auth.current_user_or_bookmarklet] = lambda u=self.user: u
+            return super().request(*args, **kwargs)
+
+    a = UserClient(alice)
+    b = UserClient(bob)
+    try:
+        yield a, b
+    finally:
+        app.dependency_overrides.clear()
+
+
+@pytest.fixture
+def raw_client(db_setup):
+    """TestClient with NO auth overrides. Use to verify that endpoints
+    require authentication (the real `current_user` dep runs and rejects
+    requests without a Bearer header).
+    """
+    from fastapi.testclient import TestClient
+    from app.main import app
+
+    # Seed a user so the bookmarklet-token branch has something to find.
+    seeded = db_setup("raw_clerk", "raw@example.com", "raw-bookmarklet-token")
+
+    tc = TestClient(app)
+    tc.seeded_user = seeded  # type: ignore[attr-defined]
+    return tc
 
 
 @pytest.fixture
