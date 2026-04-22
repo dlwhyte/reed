@@ -252,6 +252,65 @@ def test_bookmarklet_unknown_token_rejected(raw_client):
     assert r.status_code == 401
 
 
+# --- A09 — Security event audit log ---------------------------------------
+
+
+def _audit_events(event: str | None = None) -> list[dict]:
+    from app import db
+
+    with db.connect() as conn:
+        if event:
+            rows = conn.execute(
+                "SELECT event, ip, detail, path FROM auth_events WHERE event = ? ORDER BY id",
+                (event,),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT event, ip, detail, path FROM auth_events ORDER BY id"
+            ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def test_audit_logs_missing_bearer(raw_client):
+    raw_client.get("/api/me")
+    events = _audit_events("missing_bearer")
+    assert len(events) == 1
+    assert events[0]["path"] == "/api/me"
+
+
+def test_audit_logs_invalid_bookmarklet(raw_client):
+    raw_client.post(
+        "/api/save?token=not-a-real-token",
+        json={"url": "https://example.com/audit"},
+    )
+    events = _audit_events("invalid_bookmarklet")
+    assert len(events) == 1
+    # Detail must only contain a short prefix of the bad token — never the
+    # whole thing — so the audit log itself can't be used to learn valid
+    # tokens.
+    assert "not-a-" in events[0]["detail"] and "real-token" not in events[0]["detail"]
+
+
+def test_audit_records_rate_limit(client, fake_article, monkeypatch):
+    from app import ratelimit
+    from app.main import app, _save_limit
+
+    monkeypatch.setattr(ratelimit, "_ENABLED", True)
+    tight = ratelimit.make_limiter(per_minute=300, burst=1)
+    app.dependency_overrides[_save_limit] = tight
+
+    try:
+        # First save succeeds, second should be rate-limited.
+        client.post("/api/save", json={"url": "https://example.com/a-1"})
+        client.post("/api/save", json={"url": "https://example.com/a-2"})
+    finally:
+        app.dependency_overrides.pop(_save_limit, None)
+
+    events = _audit_events("rate_limit")
+    assert len(events) >= 1
+    assert events[-1]["path"] == "/api/save"
+
+
 # --- A04 — Rate limiting --------------------------------------------------
 
 
