@@ -30,6 +30,11 @@ os.environ["TAVILY_API_KEY"] = ""
 # Tests simulate article fetches against local fakes, which live on
 # loopback / RFC1918 — allow that explicitly.
 os.environ["READER_ALLOW_PRIVATE_URLS"] = "true"
+# Rate limiter shares state across the pytest session via a module-global
+# dict; disable it in normal test runs so tests don't interfere with each
+# other. Tests that exercise the limiter explicitly re-enable it via
+# monkeypatch on `app.ratelimit._ENABLED`.
+os.environ["RATELIMIT_ENABLED"] = "false"
 
 
 @pytest.fixture

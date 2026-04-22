@@ -20,6 +20,17 @@ from .auth import (
     current_user_or_bookmarklet,
     regenerate_bookmarklet_token,
 )
+from .ratelimit import make_limiter
+
+
+# Per-endpoint limiters. Burst defaults to the per-minute number, so a
+# user can do their full minute of work in one go and then has to wait.
+_save_limit = make_limiter(60)
+_share_limit = make_limiter(60)
+_chat_limit = make_limiter(20)
+_research_limit = make_limiter(10)
+_semantic_limit = make_limiter(30)
+_regen_limit = make_limiter(6)
 
 
 app = FastAPI(title="Reader")
@@ -134,7 +145,10 @@ def me(user: dict = Depends(current_user)):
 
 
 @app.post("/api/me/regenerate-bookmarklet-token")
-def regenerate_token(user: dict = Depends(current_user)):
+def regenerate_token(
+    user: dict = Depends(current_user),
+    _: None = Depends(_regen_limit),
+):
     return {"bookmarklet_token": regenerate_bookmarklet_token(user["id"])}
 
 
@@ -206,7 +220,11 @@ async def _save_article(user_id: int, url: str) -> dict:
 
 
 @app.post("/api/save")
-async def save(req: SaveReq, user: dict = Depends(current_user_or_bookmarklet)):
+async def save(
+    req: SaveReq,
+    user: dict = Depends(current_user_or_bookmarklet),
+    _: None = Depends(_save_limit),
+):
     # Accepts either a Clerk JWT (frontend) or ?token=<bookmarklet_token>
     # (extension / bookmarklet).
     return await _save_article(user["id"], req.url)
@@ -218,6 +236,7 @@ async def share_target(
     url: str | None = None,
     text: str | None = None,
     title: str | None = None,
+    _: None = Depends(_share_limit),
 ):
     """Web Share Target endpoint (PWA share_target spec).
     Extracts a URL from url/text/title fields and saves it, then redirects to library."""
@@ -250,6 +269,7 @@ async def share_target(
 async def save_via_get(
     url: str,
     user: dict = Depends(current_user_or_bookmarklet),
+    _: None = Depends(_share_limit),
 ):
     """GET save endpoint for the bookmarklet (works from HTTPS pages via popup).
     Auth via Clerk bearer OR ?token=<bookmarklet_token>."""
@@ -436,7 +456,12 @@ def search(q: str, limit: int = 50, user: dict = Depends(current_user)):
 
 
 @app.get("/api/semantic-search")
-async def semantic_search(q: str, limit: int = 20, user: dict = Depends(current_user)):
+async def semantic_search(
+    q: str,
+    limit: int = 20,
+    user: dict = Depends(current_user),
+    _: None = Depends(_semantic_limit),
+):
     if not q.strip():
         return []
     if not config.LLM_READY:
@@ -534,7 +559,12 @@ def list_tags(user: dict = Depends(current_user)):
 
 
 @app.post("/api/articles/{article_id}/chat")
-async def chat(article_id: int, req: ChatReq, user: dict = Depends(current_user)):
+async def chat(
+    article_id: int,
+    req: ChatReq,
+    user: dict = Depends(current_user),
+    _: None = Depends(_chat_limit),
+):
     with db.connect() as conn:
         row = conn.execute(
             "SELECT title, content FROM articles WHERE id = ? AND user_id = ?",
@@ -558,7 +588,12 @@ async def chat(article_id: int, req: ChatReq, user: dict = Depends(current_user)
 
 
 @app.post("/api/articles/{article_id}/research")
-async def research(article_id: int, req: ChatReq, user: dict = Depends(current_user)):
+async def research(
+    article_id: int,
+    req: ChatReq,
+    user: dict = Depends(current_user),
+    _: None = Depends(_research_limit),
+):
     async def event_stream():
         try:
             async for event in agent.run_research(article_id, user["id"], req.question):
