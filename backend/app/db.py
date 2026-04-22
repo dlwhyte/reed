@@ -87,6 +87,20 @@ CREATE TABLE IF NOT EXISTS cohere_usage (
 CREATE INDEX IF NOT EXISTS idx_cohere_usage_ts ON cohere_usage(ts);
 CREATE INDEX IF NOT EXISTS idx_cohere_usage_endpoint ON cohere_usage(endpoint);
 CREATE INDEX IF NOT EXISTS idx_cohere_usage_user ON cohere_usage(user_id);
+
+CREATE TABLE IF NOT EXISTS auth_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ts TEXT DEFAULT CURRENT_TIMESTAMP,
+    event TEXT NOT NULL,
+    ip TEXT,
+    user_id INTEGER,
+    detail TEXT,
+    path TEXT,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_auth_events_ts ON auth_events(ts);
+CREATE INDEX IF NOT EXISTS idx_auth_events_event ON auth_events(event);
 """
 
 

@@ -27,6 +27,8 @@ from typing import Callable, Optional
 
 from fastapi import HTTPException, Request
 
+from . import audit
+
 
 def _client_ip(request: Request) -> str:
     xff = request.headers.get("x-forwarded-for", "")
@@ -87,6 +89,7 @@ def make_limiter(per_minute: float, burst: Optional[int] = None) -> Callable:
         if not _ENABLED:
             return
         if not bucket.take(_key(request)):
+            audit.record("rate_limit", request, detail=f"{per_minute}/min")
             raise HTTPException(
                 status_code=429,
                 detail="Rate limit exceeded — slow down and try again in a minute.",

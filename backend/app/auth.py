@@ -7,6 +7,7 @@ import jwt
 from fastapi import Depends, HTTPException, Request, status
 from jwt import PyJWKClient
 
+from . import audit
 from .config import AUTH_READY, CLERK_ISSUER, CLERK_JWKS_URL
 from .db import connect
 
@@ -26,7 +27,7 @@ def _jwks_client() -> PyJWKClient:
     return _JWKS_CLIENT
 
 
-def _verify_clerk_jwt(token: str) -> dict:
+def _verify_clerk_jwt(token: str, request: Optional[Request] = None) -> dict:
     try:
         signing_key = _jwks_client().get_signing_key_from_jwt(token)
         claims = jwt.decode(
@@ -36,13 +37,20 @@ def _verify_clerk_jwt(token: str) -> dict:
             issuer=CLERK_ISSUER,
             options={"verify_aud": False},
         )
+    except jwt.ExpiredSignatureError as e:
+        audit.record("expired_jwt", request, detail=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Token expired"
+        )
     except jwt.PyJWTError as e:
+        audit.record("invalid_jwt", request, detail=str(e))
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=f"Invalid token: {e}",
         )
     exp = claims.get("exp")
     if exp and exp < time.time():
+        audit.record("expired_jwt", request, detail="exp in past")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Token expired"
         )
@@ -87,13 +95,15 @@ def _get_or_create_user(clerk_user_id: str, email: Optional[str]) -> dict:
 def current_user(request: Request) -> dict:
     token = _bearer_token(request)
     if not token:
+        audit.record("missing_bearer", request)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Missing bearer token",
         )
-    claims = _verify_clerk_jwt(token)
+    claims = _verify_clerk_jwt(token, request)
     clerk_user_id = claims.get("sub")
     if not clerk_user_id:
+        audit.record("invalid_jwt", request, detail="missing sub")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Token missing sub"
         )
@@ -104,9 +114,10 @@ def current_user(request: Request) -> dict:
 def current_user_or_bookmarklet(request: Request) -> dict:
     token = _bearer_token(request)
     if token:
-        claims = _verify_clerk_jwt(token)
+        claims = _verify_clerk_jwt(token, request)
         clerk_user_id = claims.get("sub")
         if not clerk_user_id:
+            audit.record("invalid_jwt", request, detail="missing sub")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED, detail="Token missing sub"
             )
@@ -122,7 +133,15 @@ def current_user_or_bookmarklet(request: Request) -> dict:
             ).fetchone()
             if row:
                 return dict(row)
+        # Token was provided but didn't match any user — log the first few
+        # bytes (never the full token) so we can spot brute-force patterns.
+        audit.record("invalid_bookmarklet", request, detail=bm[:6] + "…")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid bookmarklet token",
+        )
 
+    audit.record("missing_bearer", request)
     raise HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Missing bearer token or bookmarklet token",
