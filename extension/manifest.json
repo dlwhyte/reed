@@ -4,7 +4,10 @@
   "version": "1.0.0",
   "description": "Save any page to your BrowseFellow shelf — a warm reading library with highlights, tags, and optional AI summaries.",
   "permissions": ["activeTab", "contextMenus", "storage"],
-  "host_permissions": ["http://localhost:8765/*"],
+  "host_permissions": [
+    "http://localhost:8765/*",
+    "https://browsefellow.com/*"
+  ],
   "action": {
     "default_popup": "popup.html",
     "default_icon": {
