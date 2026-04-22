@@ -1,10 +1,13 @@
 {
   "manifest_version": 3,
   "name": "BrowseFellow",
-  "version": "1.0",
-  "description": "Save any page to your BrowseFellow shelf — a warm, local-first reading library.",
+  "version": "1.0.0",
+  "description": "Save any page to your BrowseFellow shelf — a warm reading library with highlights, tags, and optional AI summaries.",
   "permissions": ["activeTab", "contextMenus", "storage"],
-  "host_permissions": ["http://localhost:8765/*"],
+  "host_permissions": [
+    "http://localhost:8765/*",
+    "https://browsefellow.com/*"
+  ],
   "action": {
     "default_popup": "popup.html",
     "default_icon": {
@@ -16,6 +19,10 @@
   },
   "background": {
     "service_worker": "background.js"
+  },
+  "options_ui": {
+    "page": "options.html",
+    "open_in_tab": true
   },
   "icons": {
     "16": "icons/icon16.png",

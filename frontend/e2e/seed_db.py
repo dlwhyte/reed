@@ -39,12 +39,22 @@ def main() -> None:
     db.init_db()
 
     with db.connect() as conn:
+        # The e2e bypass in backend/app/auth.py looks up this clerk_user_id
+        # on every request; keep them in sync.
+        cur = conn.execute(
+            "INSERT INTO users (clerk_user_id, email, bookmarklet_token) "
+            "VALUES (?, ?, ?)",
+            ("e2e-user", "e2e@example.com", "e2e-bookmarklet-token"),
+        )
+        user_id = cur.lastrowid
+
         conn.execute(
             """INSERT INTO articles
-               (url, title, author, site_name, content, excerpt,
+               (user_id, url, title, author, site_name, content, excerpt,
                 word_count, read_time_min, summary_short, summary_long, tags)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
+                user_id,
                 "https://example.com/fixture",
                 "Fixture Article for E2E",
                 "Test Author",

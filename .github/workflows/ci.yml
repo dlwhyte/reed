@@ -89,6 +89,10 @@ jobs:
         run: npm ci
       - name: Build frontend (backend serves dist/)
         working-directory: frontend
+        env:
+          # Skip Clerk in the e2e build — the backend honors the matching
+          # E2E_AUTH_BYPASS env var set in playwright.config.ts.
+          VITE_E2E_BYPASS: "true"
         run: npm run build
       - name: Install Playwright Chromium
         working-directory: frontend

@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Privacy Policy — BrowseFellow</title>
+    <link rel="icon" href="/favicon.svg" />
+    <style>
+      :root {
+        --paper: #f8f1e4;
+        --ink: #2b2320;
+        --ink-muted: #5a4b40;
+        --rule: #e3d6be;
+        --terracotta: oklch(0.65 0.12 40);
+      }
+      html, body { margin: 0; padding: 0; background: var(--paper); color: var(--ink); }
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Inter", sans-serif;
+        max-width: 720px;
+        margin: 0 auto;
+        padding: 48px 24px 96px;
+        line-height: 1.55;
+      }
+      header { margin-bottom: 32px; }
+      h1 {
+        font-family: "Source Serif 4", Georgia, serif;
+        font-weight: 600;
+        letter-spacing: -0.02em;
+        font-size: 36px;
+        margin: 0 0 4px;
+      }
+      h2 {
+        font-family: "Source Serif 4", Georgia, serif;
+        font-weight: 600;
+        font-size: 20px;
+        margin-top: 32px;
+        margin-bottom: 8px;
+      }
+      .meta { color: var(--ink-muted); font-size: 13px; }
+      p, li { font-size: 15px; color: var(--ink); }
+      ul { padding-left: 22px; }
+      a { color: var(--terracotta); text-decoration: none; border-bottom: 1px dashed var(--terracotta); }
+      a:hover { filter: brightness(1.1); }
+      code {
+        background: #fdf8ec;
+        border: 1px solid var(--rule);
+        border-radius: 4px;
+        padding: 1px 5px;
+        font-size: 13px;
+      }
+      .back { display: inline-block; margin-top: 48px; font-size: 13px; color: var(--ink-muted); }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Privacy Policy</h1>
+      <div class="meta">Last updated 2026-04-22 · <a href="/">Back to BrowseFellow</a></div>
+    </header>
+
+    <p>
+      BrowseFellow is a reading-shelf service at
+      <a href="https://browsefellow.com">browsefellow.com</a> and a companion
+      Chrome extension that lets you save web pages to your shelf. This
+      policy explains what data is collected, how it's used, and what your
+      rights are.
+    </p>
+
+    <h2>What we collect</h2>
+    <p><strong>Account information</strong> (stored in the BrowseFellow database, provided via Clerk):</p>
+    <ul>
+      <li>Your email address</li>
+      <li>A unique user identifier issued by our authentication provider (Clerk)</li>
+    </ul>
+    <p><strong>Content you save</strong>:</p>
+    <ul>
+      <li>The URLs of pages you save</li>
+      <li>Extracted readable text, titles, authors, publication dates, images, and excerpts of those pages</li>
+      <li>Any highlights, notes, and tags you add</li>
+      <li>Read state, progress, and timestamps</li>
+    </ul>
+    <p><strong>Usage metadata</strong> (when optional AI features are enabled):</p>
+    <ul>
+      <li>Aggregate token counts of calls made to the LLM provider (Cohere) on your behalf, used to track cost and enforce per-user limits.</li>
+    </ul>
+    <p><strong>What we do NOT collect</strong>:</p>
+    <ul>
+      <li>Web browsing history outside of pages you explicitly save</li>
+      <li>Page content from sites you visit but don't save</li>
+      <li>Any data about other tabs or windows</li>
+      <li>Advertising identifiers</li>
+      <li>Location data</li>
+    </ul>
+
+    <h2>How we use your data</h2>
+    <ul>
+      <li>To operate the service: display your saved articles, run keyword and semantic search, provide AI summaries if enabled, and render the reader UI.</li>
+      <li>To enforce per-user limits on paid features.</li>
+      <li>To debug and improve the service.</li>
+    </ul>
+    <p>We do not sell or share your data with advertisers. We do not train models on your content.</p>
+
+    <h2>Third parties</h2>
+    <ul>
+      <li><strong>Clerk</strong> (authentication) — handles sign-up, sign-in, and session management. <a href="https://clerk.com/privacy">Policy</a>.</li>
+      <li><strong>Cohere</strong> (optional AI) — if you use AI features, the title and text of the saved article are sent to Cohere. <a href="https://cohere.com/privacy">Policy</a>.</li>
+      <li><strong>Tavily</strong> (optional web search) — if you use the research agent with web search, your query is sent to Tavily. <a href="https://tavily.com/privacy">Policy</a>.</li>
+      <li><strong>Hetzner</strong> (hosting) — processes request metadata for network operations only.</li>
+      <li><strong>Let's Encrypt</strong> (TLS) — certificates for browsefellow.com.</li>
+    </ul>
+
+    <h2>The Chrome extension</h2>
+    <p>
+      The extension talks only to
+      <a href="https://browsefellow.com">browsefellow.com</a> and only when
+      you explicitly save a page via the popup, right-click menu, or
+      keyboard shortcut. It reads the active tab's URL and title at the
+      moment you invoke it. It does not track browsing, does not read page
+      content unless you save the page, and does not send data to any
+      other server. Your bookmarklet token is stored locally in
+      <code>chrome.storage.local</code> and used only to authenticate to
+      browsefellow.com.
+    </p>
+
+    <h2>Data retention and deletion</h2>
+    <p>
+      Your data is retained as long as your account exists. To delete your
+      account and all associated articles, highlights, and settings, email
+      the address below; deletion is permanent and happens within 7 days.
+    </p>
+
+    <h2>Your rights</h2>
+    <ul>
+      <li><strong>Access</strong> — you can see all your data through the BrowseFellow interface.</li>
+      <li><strong>Export</strong> — the Highlights page has an export feature; an API export for articles is available on request.</li>
+      <li><strong>Deletion</strong> — as above, email to delete.</li>
+      <li><strong>Correction</strong> — edit tags, highlights, and notes directly; update your email via Clerk.</li>
+    </ul>
+
+    <h2>Contact</h2>
+    <p>Questions or deletion requests: <a href="mailto:dlwhyte@gmail.com">dlwhyte@gmail.com</a></p>
+
+    <h2>Changes</h2>
+    <p>We'll update the "Last updated" date above when this policy changes. Material changes will be surfaced in the app.</p>
+
+    <a class="back" href="/">← Back to BrowseFellow</a>
+  </body>
+</html>

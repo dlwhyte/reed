@@ -84,6 +84,25 @@ export default function Library() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab, activeTag, sort]);
 
+  // Refresh the shelf whenever the tab regains focus — so saves from the
+  // extension / bookmarklet / another device show up without a manual reload.
+  // Skipped while the user is actively searching, to avoid clobbering
+  // search results.
+  useEffect(() => {
+    function onVisible() {
+      if (document.visibilityState === "visible" && !q.trim()) {
+        load();
+      }
+    }
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onVisible);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onVisible);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [q, tab, activeTag, sort]);
+
   // Debounced inline search.
   useEffect(() => {
     if (!q.trim()) return;

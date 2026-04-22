@@ -52,6 +52,10 @@ export default defineConfig({
       TAVILY_API_KEY: "",
       READER_ALLOW_PRIVATE_URLS: "true",
       PORT: String(PORT),
+      // Bypass Clerk JWT verification — safe because Clerk env vars are
+      // unset here (see backend/app/auth.py for the AUTH_READY gate).
+      E2E_AUTH_BYPASS: "true",
+      RATELIMIT_ENABLED: "false",
     },
   },
 });

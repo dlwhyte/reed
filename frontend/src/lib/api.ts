@@ -32,10 +32,36 @@ const STORED = typeof window !== "undefined" ? localStorage.getItem("reed.backen
 const ORIGIN = STORED || (isNative ? DEFAULT_NATIVE_BASE : "");
 const BASE = ORIGIN + "/api";
 
+export { BASE as API_BASE, ORIGIN as API_ORIGIN };
+
+// Clerk's getToken() is only callable inside a component, so the App's
+// AuthBridge wires it in at mount time. When unset (unauth'd or before
+// ClerkProvider mounts), requests go through without an Authorization
+// header and the backend returns 401.
+let _getToken: (() => Promise<string | null>) | null = null;
+export function setTokenGetter(fn: (() => Promise<string | null>) | null) {
+  _getToken = fn;
+}
+
+async function _authHeader(): Promise<Record<string, string>> {
+  if (!_getToken) return {};
+  try {
+    const t = await _getToken();
+    return t ? { Authorization: `Bearer ${t}` } : {};
+  } catch {
+    return {};
+  }
+}
+
 async function j<T>(path: string, opts?: RequestInit): Promise<T> {
+  const auth = await _authHeader();
   const r = await fetch(BASE + path, {
     ...opts,
-    headers: { "Content-Type": "application/json", ...(opts?.headers || {}) },
+    headers: {
+      "Content-Type": "application/json",
+      ...auth,
+      ...(opts?.headers || {}),
+    },
   });
   if (!r.ok) {
     const t = await r.text();
@@ -76,10 +102,22 @@ export type UsageSnapshot = {
   pricing: Record<string, { input: number; output: number }>;
 };
 
+export type Me = {
+  id: number;
+  clerk_user_id: string;
+  email: string | null;
+  bookmarklet_token: string;
+};
+
 export const api = {
   health: () => j<{ ok: boolean; llm: boolean }>("/health"),
-  config: () => j<{ llm_ready: boolean; enable_llm: boolean; web_search_ready: boolean; chat_model: string; embed_model: string; port: number }>("/config"),
+  config: () => j<{ llm_ready: boolean; enable_llm: boolean; web_search_ready: boolean; auth_ready: boolean; chat_model: string; embed_model: string; port: number }>("/config"),
   usage: () => j<UsageSnapshot>("/usage"),
+  me: () => j<Me>("/me"),
+  regenerateBookmarkletToken: () =>
+    j<{ bookmarklet_token: string }>("/me/regenerate-bookmarklet-token", {
+      method: "POST",
+    }),
   save: (url: string) => j<{ id: number; duplicate: boolean; title?: string }>("/save", { method: "POST", body: JSON.stringify({ url }) }),
   list: (state: string, tag?: string | null, sort = "newest") => {
     const qs = new URLSearchParams({ state, sort });
@@ -111,9 +149,10 @@ export async function* chatStream(
   question: string,
   history: { role: string; content: string }[]
 ): AsyncGenerator<string> {
+  const auth = await _authHeader();
   const r = await fetch(`${BASE}/articles/${articleId}/chat`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...auth },
     body: JSON.stringify({ question, history }),
   });
   if (!r.body) return;
@@ -151,9 +190,10 @@ export async function* researchStream(
   articleId: number,
   question: string
 ): AsyncGenerator<ResearchEvent> {
+  const auth = await _authHeader();
   const r = await fetch(`${BASE}/articles/${articleId}/research`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...auth },
     body: JSON.stringify({ question, history: [] }),
   });
   if (!r.body) return;

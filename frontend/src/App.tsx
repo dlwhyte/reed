@@ -1,5 +1,6 @@
 import { Routes, Route } from "react-router-dom";
 import { useEffect, useState } from "react";
+import { SignedIn, SignedOut, SignIn, useAuth } from "@clerk/clerk-react";
 import Library from "./pages/Library";
 import Reader from "./pages/Reader";
 import Settings from "./pages/Settings";
@@ -7,6 +8,21 @@ import Tags from "./pages/Tags";
 import Highlights from "./pages/Highlights";
 import { CommandPalette } from "./components/CommandPalette";
 import { useStore } from "./store";
+import { setTokenGetter } from "./lib/api";
+
+const E2E_BYPASS = import.meta.env.VITE_E2E_BYPASS === "true";
+
+// Bridges Clerk's useAuth().getToken (only accessible inside the provider
+// tree) into the module-level api.ts token getter so fetch() calls can
+// attach Authorization headers without being React components.
+function AuthBridge() {
+  const { getToken } = useAuth();
+  useEffect(() => {
+    setTokenGetter(() => getToken());
+    return () => setTokenGetter(null);
+  }, [getToken]);
+  return null;
+}
 
 export default function App() {
   const { prefs } = useStore();
@@ -30,7 +46,7 @@ export default function App() {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  return (
+  const appRoutes = (
     <>
       <Routes>
         <Route path="/" element={<Library />} />
@@ -40,6 +56,34 @@ export default function App() {
         <Route path="/highlights" element={<Highlights />} />
       </Routes>
       {paletteOpen && <CommandPalette onClose={() => setPaletteOpen(false)} />}
+    </>
+  );
+
+  // E2E build skips Clerk entirely — the backend honors E2E_AUTH_BYPASS so
+  // requests don't need an Authorization header either.
+  if (E2E_BYPASS) {
+    return appRoutes;
+  }
+
+  return (
+    <>
+      <SignedIn>
+        <AuthBridge />
+        {appRoutes}
+      </SignedIn>
+      <SignedOut>
+        <div
+          style={{
+            minHeight: "100vh",
+            display: "grid",
+            placeItems: "center",
+            padding: 24,
+            background: "#f8f1e4",
+          }}
+        >
+          <SignIn routing="hash" />
+        </div>
+      </SignedOut>
     </>
   );
 }

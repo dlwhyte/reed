@@ -9,12 +9,28 @@ import socket
 from pathlib import Path
 from urllib.parse import urlparse
 from pydantic import BaseModel
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, HTMLResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from . import config, db, extractor, cohere_client, agent
+from .auth import (
+    current_user,
+    current_user_or_bookmarklet,
+    regenerate_bookmarklet_token,
+)
+from .ratelimit import make_limiter
+
+
+# Per-endpoint limiters. Burst defaults to the per-minute number, so a
+# user can do their full minute of work in one go and then has to wait.
+_save_limit = make_limiter(60)
+_share_limit = make_limiter(60)
+_chat_limit = make_limiter(20)
+_research_limit = make_limiter(10)
+_semantic_limit = make_limiter(30)
+_regen_limit = make_limiter(6)
 
 
 app = FastAPI(title="Reader")
@@ -75,16 +91,11 @@ def _validate_save_url(url: str) -> None:
     host = urlparse(url).hostname
     if not host:
         raise HTTPException(400, "URL is missing a host")
-    # Reject literal private IPs without DNS — catches http://127.0.0.1 etc.
     if _is_private_ip(host):
         raise HTTPException(400, "Refusing to fetch a private/loopback address")
-    # Resolve via DNS and reject if any resulting address is private. This
-    # catches hostnames that *point at* loopback or RFC1918 space.
     try:
         infos = socket.getaddrinfo(host, None)
     except socket.gaierror:
-        # DNS failure surfaces as a normal fetch error downstream; don't
-        # block here.
         return
     for info in infos:
         ip = info[4][0]
@@ -123,17 +134,37 @@ def health():
     return {"ok": True, "llm": config.LLM_READY}
 
 
-@app.post("/api/save")
-async def save(req: SaveReq):
-    url = req.url.strip()
+@app.get("/api/me")
+def me(user: dict = Depends(current_user)):
+    return {
+        "id": user["id"],
+        "clerk_user_id": user["clerk_user_id"],
+        "email": user["email"],
+        "bookmarklet_token": user["bookmarklet_token"],
+    }
+
+
+@app.post("/api/me/regenerate-bookmarklet-token")
+def regenerate_token(
+    user: dict = Depends(current_user),
+    _: None = Depends(_regen_limit),
+):
+    return {"bookmarklet_token": regenerate_bookmarklet_token(user["id"])}
+
+
+async def _save_article(user_id: int, url: str) -> dict:
+    """Shared save path. Returns {id, duplicate, title}. Raises HTTPException
+    on fetch/extract failure."""
+    url = url.strip()
     _validate_save_url(url)
 
     with db.connect() as conn:
         existing = conn.execute(
-            "SELECT id FROM articles WHERE url = ?", (url,)
+            "SELECT id, title FROM articles WHERE user_id = ? AND url = ?",
+            (user_id, url),
         ).fetchone()
         if existing:
-            return {"id": existing["id"], "duplicate": True}
+            return {"id": existing["id"], "duplicate": True, "title": existing["title"]}
 
     try:
         html = await extractor.fetch_html(url)
@@ -152,7 +183,7 @@ async def save(req: SaveReq):
     if config.LLM_READY:
         try:
             llm_data = await cohere_client.summarize_and_tag(
-                article["title"], article["content"]
+                article["title"], article["content"], user_id=user_id
             )
             summary_short = llm_data["summary_short"]
             summary_long = llm_data["summary_long"]
@@ -164,6 +195,7 @@ async def save(req: SaveReq):
             vecs = await cohere_client.embed(
                 [article["title"] + "\n\n" + article["content"][:4000]],
                 endpoint="save_embed",
+                user_id=user_id,
             )
             if vecs and vecs[0]:
                 embedding_blob = cohere_client.embedding_to_blob(vecs[0])
@@ -173,12 +205,12 @@ async def save(req: SaveReq):
     with db.connect() as conn:
         cur = conn.execute(
             """INSERT INTO articles
-            (url, title, author, site_name, published, content, excerpt,
+            (user_id, url, title, author, site_name, published, content, excerpt,
              image_url, word_count, read_time_min, summary_short, summary_long,
              tags, embedding)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             (
-                url, article["title"], article["author"], article["site_name"],
+                user_id, url, article["title"], article["author"], article["site_name"],
                 article["published"], article["content"], article["excerpt"],
                 article["image_url"], article["word_count"], article["read_time_min"],
                 summary_short, summary_long, json.dumps(tags), embedding_blob,
@@ -187,11 +219,24 @@ async def save(req: SaveReq):
         return {"id": cur.lastrowid, "duplicate": False, "title": article["title"]}
 
 
+@app.post("/api/save")
+async def save(
+    req: SaveReq,
+    user: dict = Depends(current_user_or_bookmarklet),
+    _: None = Depends(_save_limit),
+):
+    # Accepts either a Clerk JWT (frontend) or ?token=<bookmarklet_token>
+    # (extension / bookmarklet).
+    return await _save_article(user["id"], req.url)
+
+
 @app.get("/share", response_class=HTMLResponse)
 async def share_target(
+    user: dict = Depends(current_user_or_bookmarklet),
     url: str | None = None,
     text: str | None = None,
     title: str | None = None,
+    _: None = Depends(_share_limit),
 ):
     """Web Share Target endpoint (PWA share_target spec).
     Extracts a URL from url/text/title fields and saves it, then redirects to library."""
@@ -217,14 +262,23 @@ async def share_target(
         )
     if len(candidate) > MAX_URL_LENGTH:
         raise HTTPException(400, "URL is too long")
-    return await save_via_get(candidate)
+    return await _save_via_get_impl(user["id"], candidate)
 
 
 @app.get("/save", response_class=HTMLResponse)
-async def save_via_get(url: str):
-    """GET save endpoint for the bookmarklet (works from HTTPS pages via popup)."""
+async def save_via_get(
+    url: str,
+    user: dict = Depends(current_user_or_bookmarklet),
+    _: None = Depends(_share_limit),
+):
+    """GET save endpoint for the bookmarklet (works from HTTPS pages via popup).
+    Auth via Clerk bearer OR ?token=<bookmarklet_token>."""
+    return await _save_via_get_impl(user["id"], url)
+
+
+async def _save_via_get_impl(user_id: int, url: str) -> HTMLResponse:
     try:
-        result = await save(SaveReq(url=url))
+        result = await _save_article(user_id, url)
         title = result.get("title") or url
         status = "Already saved" if result.get("duplicate") else "Saved"
         color = "#888" if result.get("duplicate") else "#0a7a2a"
@@ -237,9 +291,6 @@ async def save_via_get(url: str):
         status = "Error"
         color = "#c0392b"
 
-    # Titles come from user-controlled HTML and can contain `<script>` or
-    # attribute-breaking quotes. Escape everything interpolated into the
-    # response page before rendering.
     safe_title = _html.escape(str(title))
     safe_status = _html.escape(str(status))
     safe_color = _html.escape(str(color))
@@ -278,9 +329,12 @@ def list_articles(
     tag: str | None = None,
     sort: str = Query("newest", pattern="^(newest|oldest|longest|shortest)$"),
     limit: int = 200,
+    user: dict = Depends(current_user_or_bookmarklet),
 ):
-    where = []
-    params: list = []
+    # Accepts Clerk JWT or ?token=<bookmarklet_token>; the extension popup
+    # lists recent saves via the bookmarklet token.
+    where = ["user_id = ?"]
+    params: list = [user["id"]]
     if state == "unread":
         where.append("is_archived = 0")
     elif state == "archived":
@@ -292,7 +346,7 @@ def list_articles(
         where.append("tags LIKE ?")
         params.append(f'%"{tag}"%')
 
-    where_sql = "WHERE " + " AND ".join(where) if where else ""
+    where_sql = "WHERE " + " AND ".join(where)
     order = {
         "newest": "created_at DESC",
         "oldest": "created_at ASC",
@@ -312,10 +366,11 @@ def list_articles(
 
 
 @app.get("/api/articles/{article_id}")
-def get_article(article_id: int):
+def get_article(article_id: int, user: dict = Depends(current_user)):
     with db.connect() as conn:
         row = conn.execute(
-            "SELECT * FROM articles WHERE id = ?", (article_id,)
+            "SELECT * FROM articles WHERE id = ? AND user_id = ?",
+            (article_id, user["id"]),
         ).fetchone()
     if not row:
         raise HTTPException(404, "Not found")
@@ -323,7 +378,9 @@ def get_article(article_id: int):
 
 
 @app.patch("/api/articles/{article_id}")
-def update_article(article_id: int, req: UpdateReq):
+def update_article(
+    article_id: int, req: UpdateReq, user: dict = Depends(current_user)
+):
     fields = []
     params: list = []
     if req.is_archived is not None:
@@ -345,23 +402,31 @@ def update_article(article_id: int, req: UpdateReq):
     if not fields:
         return {"ok": True}
 
-    params.append(article_id)
+    params.extend([article_id, user["id"]])
     with db.connect() as conn:
-        conn.execute(
-            f"UPDATE articles SET {', '.join(fields)} WHERE id = ?", tuple(params)
+        cur = conn.execute(
+            f"UPDATE articles SET {', '.join(fields)} WHERE id = ? AND user_id = ?",
+            tuple(params),
         )
+    if cur.rowcount == 0:
+        raise HTTPException(404, "Not found")
     return {"ok": True}
 
 
 @app.delete("/api/articles/{article_id}")
-def delete_article(article_id: int):
+def delete_article(article_id: int, user: dict = Depends(current_user)):
     with db.connect() as conn:
-        conn.execute("DELETE FROM articles WHERE id = ?", (article_id,))
+        cur = conn.execute(
+            "DELETE FROM articles WHERE id = ? AND user_id = ?",
+            (article_id, user["id"]),
+        )
+    if cur.rowcount == 0:
+        raise HTTPException(404, "Not found")
     return {"ok": True}
 
 
 @app.get("/api/search")
-def search(q: str, limit: int = 50):
+def search(q: str, limit: int = 50, user: dict = Depends(current_user)):
     if not q.strip():
         return []
     with db.connect() as conn:
@@ -373,31 +438,37 @@ def search(q: str, limit: int = 50):
                     a.progress, a.created_at, a.read_at
                    FROM articles a
                    JOIN articles_fts f ON f.rowid = a.id
-                   WHERE articles_fts MATCH ?
+                   WHERE articles_fts MATCH ? AND a.user_id = ?
                    ORDER BY rank LIMIT ?""",
-                (q, limit),
+                (q, user["id"], limit),
             ).fetchall()
         except Exception:
             rows = conn.execute(
                 """SELECT id, url, title, author, site_name, excerpt, image_url,
                     word_count, read_time_min, summary_short, summary_long, tags,
                     is_archived, is_favorite, progress, created_at, read_at
-                   FROM articles WHERE title LIKE ? OR excerpt LIKE ?
+                   FROM articles
+                   WHERE user_id = ? AND (title LIKE ? OR excerpt LIKE ?)
                    ORDER BY created_at DESC LIMIT ?""",
-                (f"%{q}%", f"%{q}%", limit),
+                (user["id"], f"%{q}%", f"%{q}%", limit),
             ).fetchall()
     return [db.row_to_dict(r) for r in rows]
 
 
 @app.get("/api/semantic-search")
-async def semantic_search(q: str, limit: int = 20):
+async def semantic_search(
+    q: str,
+    limit: int = 20,
+    user: dict = Depends(current_user),
+    _: None = Depends(_semantic_limit),
+):
     if not q.strip():
         return []
     if not config.LLM_READY:
         raise HTTPException(400, "Enable LLM features to use semantic search")
 
     query_vecs = await cohere_client.embed(
-        [q], input_type="search_query", endpoint="semantic_search"
+        [q], input_type="search_query", endpoint="semantic_search", user_id=user["id"]
     )
     if not query_vecs or not query_vecs[0]:
         return []
@@ -408,7 +479,9 @@ async def semantic_search(q: str, limit: int = 20):
             """SELECT id, url, title, author, site_name, excerpt, image_url,
                 word_count, read_time_min, summary_short, summary_long, tags,
                 is_archived, is_favorite, progress, created_at, read_at, embedding
-               FROM articles WHERE embedding IS NOT NULL AND length(embedding) > 0"""
+               FROM articles
+               WHERE user_id = ? AND embedding IS NOT NULL AND length(embedding) > 0""",
+            (user["id"],),
         ).fetchall()
 
     scored = []
@@ -429,12 +502,13 @@ SIMILAR_THRESHOLD = 0.45
 
 
 @app.get("/api/articles/{article_id}/similar")
-async def similar(article_id: int, limit: int = 5):
+async def similar(article_id: int, limit: int = 5, user: dict = Depends(current_user)):
     if not config.LLM_READY:
         return []
     with db.connect() as conn:
         target = conn.execute(
-            "SELECT embedding FROM articles WHERE id = ?", (article_id,)
+            "SELECT embedding FROM articles WHERE id = ? AND user_id = ?",
+            (article_id, user["id"]),
         ).fetchone()
         if not target or not target["embedding"]:
             return []
@@ -443,8 +517,9 @@ async def similar(article_id: int, limit: int = 5):
         rows = conn.execute(
             """SELECT id, url, title, site_name, excerpt, image_url,
                 word_count, read_time_min, tags, embedding
-               FROM articles WHERE id != ? AND length(embedding) > 0""",
-            (article_id,),
+               FROM articles
+               WHERE user_id = ? AND id != ? AND length(embedding) > 0""",
+            (user["id"], article_id),
         ).fetchall()
 
     scored = []
@@ -465,9 +540,11 @@ async def similar(article_id: int, limit: int = 5):
 
 
 @app.get("/api/tags")
-def list_tags():
+def list_tags(user: dict = Depends(current_user)):
     with db.connect() as conn:
-        rows = conn.execute("SELECT tags FROM articles").fetchall()
+        rows = conn.execute(
+            "SELECT tags FROM articles WHERE user_id = ?", (user["id"],)
+        ).fetchall()
     counts: dict[str, int] = {}
     for r in rows:
         try:
@@ -482,10 +559,16 @@ def list_tags():
 
 
 @app.post("/api/articles/{article_id}/chat")
-async def chat(article_id: int, req: ChatReq):
+async def chat(
+    article_id: int,
+    req: ChatReq,
+    user: dict = Depends(current_user),
+    _: None = Depends(_chat_limit),
+):
     with db.connect() as conn:
         row = conn.execute(
-            "SELECT title, content FROM articles WHERE id = ?", (article_id,)
+            "SELECT title, content FROM articles WHERE id = ? AND user_id = ?",
+            (article_id, user["id"]),
         ).fetchone()
     if not row:
         raise HTTPException(404, "Not found")
@@ -493,7 +576,7 @@ async def chat(article_id: int, req: ChatReq):
     async def event_stream():
         try:
             async for chunk in cohere_client.chat_with_article_stream(
-                row["title"], row["content"], req.history, req.question
+                row["title"], row["content"], req.history, req.question, user_id=user["id"]
             ):
                 yield f"data: {json.dumps({'delta': chunk})}\n\n"
                 await asyncio.sleep(0)
@@ -505,10 +588,15 @@ async def chat(article_id: int, req: ChatReq):
 
 
 @app.post("/api/articles/{article_id}/research")
-async def research(article_id: int, req: ChatReq):
+async def research(
+    article_id: int,
+    req: ChatReq,
+    user: dict = Depends(current_user),
+    _: None = Depends(_research_limit),
+):
     async def event_stream():
         try:
-            async for event in agent.run_research(article_id, req.question):
+            async for event in agent.run_research(article_id, user["id"], req.question):
                 yield f"data: {json.dumps(event)}\n\n"
                 await asyncio.sleep(0)
         except Exception as e:
@@ -519,31 +607,34 @@ async def research(article_id: int, req: ChatReq):
 
 
 @app.get("/api/articles/{article_id}/highlights")
-def list_article_highlights(article_id: int):
+def list_article_highlights(article_id: int, user: dict = Depends(current_user)):
     with db.connect() as conn:
         rows = conn.execute(
             """SELECT id, article_id, text, note, created_at
-               FROM highlights WHERE article_id = ?
+               FROM highlights WHERE article_id = ? AND user_id = ?
                ORDER BY id ASC""",
-            (article_id,),
+            (article_id, user["id"]),
         ).fetchall()
     return [dict(r) for r in rows]
 
 
 @app.post("/api/articles/{article_id}/highlights")
-def create_highlight(article_id: int, req: HighlightReq):
+def create_highlight(
+    article_id: int, req: HighlightReq, user: dict = Depends(current_user)
+):
     text = (req.text or "").strip()
     if not text:
         raise HTTPException(400, "empty highlight")
     with db.connect() as conn:
         exists = conn.execute(
-            "SELECT 1 FROM articles WHERE id = ?", (article_id,)
+            "SELECT 1 FROM articles WHERE id = ? AND user_id = ?",
+            (article_id, user["id"]),
         ).fetchone()
         if not exists:
             raise HTTPException(404, "article not found")
         cur = conn.execute(
-            "INSERT INTO highlights (article_id, text, note) VALUES (?, ?, ?)",
-            (article_id, text, req.note),
+            "INSERT INTO highlights (user_id, article_id, text, note) VALUES (?, ?, ?, ?)",
+            (user["id"], article_id, text, req.note),
         )
         hid = cur.lastrowid
         row = conn.execute(
@@ -554,14 +645,19 @@ def create_highlight(article_id: int, req: HighlightReq):
 
 
 @app.delete("/api/highlights/{highlight_id}")
-def delete_highlight(highlight_id: int):
+def delete_highlight(highlight_id: int, user: dict = Depends(current_user)):
     with db.connect() as conn:
-        conn.execute("DELETE FROM highlights WHERE id = ?", (highlight_id,))
+        cur = conn.execute(
+            "DELETE FROM highlights WHERE id = ? AND user_id = ?",
+            (highlight_id, user["id"]),
+        )
+    if cur.rowcount == 0:
+        raise HTTPException(404, "Not found")
     return {"ok": True}
 
 
 @app.get("/api/highlights")
-def list_all_highlights(limit: int = 200):
+def list_all_highlights(limit: int = 200, user: dict = Depends(current_user)):
     with db.connect() as conn:
         rows = conn.execute(
             """SELECT h.id, h.article_id, h.text, h.note, h.created_at,
@@ -569,8 +665,9 @@ def list_all_highlights(limit: int = 200):
                       a.url AS article_url
                FROM highlights h
                JOIN articles a ON a.id = h.article_id
+               WHERE h.user_id = ?
                ORDER BY h.id DESC LIMIT ?""",
-            (limit,),
+            (user["id"], limit),
         ).fetchall()
     return [dict(r) for r in rows]
 
@@ -581,6 +678,7 @@ def get_config():
         "llm_ready": config.LLM_READY,
         "enable_llm": config.ENABLE_LLM,
         "web_search_ready": config.WEB_SEARCH_READY,
+        "auth_ready": config.AUTH_READY,
         "chat_model": config.COHERE_CHAT_MODEL,
         "embed_model": config.COHERE_EMBED_MODEL,
         "port": config.PORT,
@@ -591,9 +689,7 @@ def get_config():
 # these are hardcoded so the $ estimate survives being offline.
 COHERE_PRICING = {
     "command-a-03-2025": {"input": 2.50, "output": 10.00},
-    # Older / aliased chat models — fall back to Command A pricing.
     "command-a": {"input": 2.50, "output": 10.00},
-    # Embed v3 is billed per input token with no output.
     "embed-english-v3.0": {"input": 0.10, "output": 0.0},
     "embed-multilingual-v3.0": {"input": 0.10, "output": 0.0},
 }
@@ -602,15 +698,14 @@ COHERE_PRICING = {
 def _price(model: str, input_tokens: int, output_tokens: int) -> float:
     p = COHERE_PRICING.get(model)
     if not p:
-        # Unknown model — assume chat-tier pricing so estimates don't under-report.
         p = {"input": 2.50, "output": 10.00}
     return (input_tokens * p["input"] + output_tokens * p["output"]) / 1_000_000
 
 
 @app.get("/api/usage")
-def get_usage():
-    """Return Cohere token usage rollups. All times are compared against
-    SQLite's CURRENT_TIMESTAMP (UTC)."""
+def get_usage(user: dict = Depends(current_user)):
+    """Return Cohere token usage rollups for the current user. All times are
+    compared against SQLite's CURRENT_TIMESTAMP (UTC)."""
     with db.connect() as conn:
         def rollup(window_sql: str) -> dict:
             rows = conn.execute(
@@ -619,8 +714,9 @@ def get_usage():
                           COALESCE(SUM(output_tokens), 0) AS output_tokens,
                           COUNT(*) AS calls
                      FROM cohere_usage
-                     {window_sql}
+                     WHERE user_id = ? {('AND ' + window_sql) if window_sql else ''}
                      GROUP BY endpoint, model""",
+                (user["id"],),
             ).fetchall()
             by_endpoint: dict[str, dict] = {}
             total_in = total_out = total_usd = total_calls = 0
@@ -649,8 +745,8 @@ def get_usage():
             }
 
         return {
-            "today": rollup("WHERE ts >= date('now', 'start of day')"),
-            "month": rollup("WHERE ts >= date('now', 'start of month')"),
+            "today": rollup("ts >= date('now', 'start of day')"),
+            "month": rollup("ts >= date('now', 'start of month')"),
             "all_time": rollup(""),
             "pricing": COHERE_PRICING,
         }

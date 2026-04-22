@@ -48,7 +48,13 @@ def _extract_tokens(resp) -> tuple[int, int]:
     return 0, 0
 
 
-def record_usage(endpoint: str, model: str, input_tokens: int, output_tokens: int) -> None:
+def record_usage(
+    endpoint: str,
+    model: str,
+    input_tokens: int,
+    output_tokens: int,
+    user_id: int | None = None,
+) -> None:
     """Log a Cohere API call. Swallows errors — usage tracking must never
     break the user-facing request."""
     if not input_tokens and not output_tokens:
@@ -56,15 +62,15 @@ def record_usage(endpoint: str, model: str, input_tokens: int, output_tokens: in
     try:
         with db.connect() as conn:
             conn.execute(
-                "INSERT INTO cohere_usage (endpoint, model, input_tokens, output_tokens) "
-                "VALUES (?, ?, ?, ?)",
-                (endpoint, model, int(input_tokens), int(output_tokens)),
+                "INSERT INTO cohere_usage (user_id, endpoint, model, input_tokens, output_tokens) "
+                "VALUES (?, ?, ?, ?, ?)",
+                (user_id, endpoint, model, int(input_tokens), int(output_tokens)),
             )
     except Exception as e:
         print(f"[usage] record failed: {e}")
 
 
-async def summarize_and_tag(title: str, content: str) -> dict:
+async def summarize_and_tag(title: str, content: str, user_id: int | None = None) -> dict:
     if not config.LLM_READY:
         return {"summary_short": "", "summary_long": "", "tags": []}
 
@@ -90,7 +96,7 @@ Respond with JSON only, no prose."""
         response_format={"type": "json_object"},
     )
     inp, out = _extract_tokens(resp)
-    record_usage("save_summarize", config.COHERE_CHAT_MODEL, inp, out)
+    record_usage("save_summarize", config.COHERE_CHAT_MODEL, inp, out, user_id=user_id)
     text = resp.message.content[0].text
     try:
         data = json.loads(text)
@@ -107,6 +113,7 @@ async def embed(
     texts: list[str],
     input_type: str = "search_document",
     endpoint: str = "embed",
+    user_id: int | None = None,
 ) -> list[list[float]]:
     if not config.LLM_READY or not texts:
         return [[] for _ in texts]
@@ -117,12 +124,16 @@ async def embed(
         embedding_types=["float"],
     )
     inp, out = _extract_tokens(resp)
-    record_usage(endpoint, config.COHERE_EMBED_MODEL, inp, out)
+    record_usage(endpoint, config.COHERE_EMBED_MODEL, inp, out, user_id=user_id)
     return resp.embeddings.float_
 
 
 async def chat_with_article_stream(
-    title: str, content: str, history: list[dict], question: str
+    title: str,
+    content: str,
+    history: list[dict],
+    question: str,
+    user_id: int | None = None,
 ) -> AsyncIterator[str]:
     if not config.LLM_READY:
         yield "LLM is disabled. Enable it in Settings to chat with articles."
@@ -157,7 +168,7 @@ async def chat_with_article_stream(
                     input_tokens = int(getattr(obj, "input_tokens", 0) or 0)
                     output_tokens = int(getattr(obj, "output_tokens", 0) or 0)
                     break
-    record_usage("chat", config.COHERE_CHAT_MODEL, input_tokens, output_tokens)
+    record_usage("chat", config.COHERE_CHAT_MODEL, input_tokens, output_tokens, user_id=user_id)
 
 
 def embedding_to_blob(vec: list[float]) -> bytes:
