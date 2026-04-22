@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>BrowseFellow — Settings</title>
+    <style>
+      :root {
+        --paper: #f8f1e4;
+        --paper-raised: #fdf8ec;
+        --ink: #2b2320;
+        --ink-muted: #7a6b5f;
+        --rule: #e3d6be;
+        --terracotta: oklch(0.65 0.12 40);
+        --olive: oklch(0.55 0.08 130);
+      }
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Inter", sans-serif;
+        max-width: 560px;
+        margin: 40px auto;
+        padding: 0 20px;
+        color: var(--ink);
+        background: var(--paper);
+      }
+      h1 {
+        font-size: 20px;
+        margin: 0 0 8px;
+      }
+      p {
+        color: var(--ink-muted);
+        font-size: 13px;
+        line-height: 1.5;
+      }
+      label {
+        display: block;
+        font-size: 12px;
+        font-weight: 600;
+        margin: 20px 0 6px;
+      }
+      input[type="text"] {
+        width: 100%;
+        padding: 10px 12px;
+        border: 1px solid var(--rule);
+        border-radius: 8px;
+        font-family: ui-monospace, SFMono-Regular, monospace;
+        font-size: 13px;
+        background: var(--paper-raised);
+      }
+      button {
+        margin-top: 14px;
+        padding: 9px 18px;
+        border: none;
+        border-radius: 999px;
+        background: var(--terracotta);
+        color: #fff;
+        font-size: 13px;
+        cursor: pointer;
+      }
+      button:hover { filter: brightness(1.05); }
+      .status {
+        margin-top: 14px;
+        font-size: 13px;
+        min-height: 1.2em;
+      }
+      .status.ok { color: var(--olive); }
+      .status.err { color: var(--terracotta); }
+      code {
+        background: var(--paper-raised);
+        padding: 1px 5px;
+        border-radius: 4px;
+        font-size: 12px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>BrowseFellow — Extension Setup</h1>
+    <p>
+      Connect this extension to your BrowseFellow account. Open the web app,
+      sign in, go to <strong>Settings</strong>, and copy your bookmarklet token
+      below. The extension will use it to save pages on your behalf.
+    </p>
+
+    <label for="backend">Backend URL</label>
+    <input id="backend" type="text" placeholder="http://localhost:8765" />
+
+    <label for="token">Bookmarklet token</label>
+    <input id="token" type="text" placeholder="paste your token here" />
+
+    <button id="save">Save</button>
+    <div id="status" class="status"></div>
+
+    <script src="options.js"></script>
+  </body>
+</html>

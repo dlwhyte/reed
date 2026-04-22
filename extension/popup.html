@@ -221,7 +221,7 @@
         border-color: color-mix(in srgb, var(--terracotta) 40%, transparent);
       }
 
-      #offline-warning {
+      #offline-warning, #setup-warning {
         display: none;
         margin-top: 10px;
         padding: 9px 12px;
@@ -231,13 +231,18 @@
         border-radius: 10px;
         font-size: 12px;
       }
-      #offline-warning .label {
+      #offline-warning .label, #setup-warning .label {
         font-family: var(--mono);
         font-size: 9px;
         letter-spacing: 0.1em;
         text-transform: uppercase;
         font-weight: 500;
         margin-bottom: 2px;
+      }
+      #setup-warning a {
+        color: inherit;
+        text-decoration: underline;
+        cursor: pointer;
       }
 
       #recents {
@@ -321,6 +326,13 @@
       <div id="offline-warning">
         <div class="label">Shelf offline</div>
         <div>Start the backend on port 8765 and retry.</div>
+      </div>
+      <div id="setup-warning">
+        <div class="label">Set up required</div>
+        <div>
+          <a data-open-options>Open settings</a> and paste your bookmarklet
+          token from the BrowseFellow web app.
+        </div>
       </div>
       <div id="status" class="status">
         <div class="label" id="status-label"></div>

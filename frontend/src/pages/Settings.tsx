@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { ArrowLeft, Check, Copy } from "lucide-react";
+import { ArrowLeft, Check, Copy, RefreshCw } from "lucide-react";
 import { clsx } from "clsx";
-import { api, type UsageBucket, type UsageSnapshot } from "../lib/api";
+import { api, type Me, type UsageBucket, type UsageSnapshot } from "../lib/api";
 import { useStore } from "../store";
 import { Wordmark } from "../components/primitives/Wordmark";
 import { Icon } from "../components/primitives/Icon";
@@ -224,9 +224,16 @@ function ReaderPrefs({
 
 function SavePrefs() {
   const origin = typeof window !== "undefined" ? window.location.origin : "";
-  const saveUrl = `${origin}/api/save`;
-  const bookmarklet = `javascript:(()=>{window.open('${origin}/save?url='+encodeURIComponent(location.href),'browsefellow_save','width=420,height=220,top=100,left=100')})();`;
+  const [me, setMe] = useState<Me | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const [regenerating, setRegenerating] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
+
+  useEffect(() => {
+    api.me()
+      .then(setMe)
+      .catch((e) => setErr(e?.message || "Failed to load account"));
+  }, []);
 
   async function copy(text: string, key: string) {
     try {
@@ -238,8 +245,78 @@ function SavePrefs() {
     }
   }
 
+  async function regenerate() {
+    if (
+      !confirm(
+        "Regenerate your bookmarklet token? The old token stops working immediately — you'll need to re-drag the bookmarklet and re-paste the token into the extension.",
+      )
+    )
+      return;
+    setRegenerating(true);
+    try {
+      const { bookmarklet_token } = await api.regenerateBookmarkletToken();
+      setMe((prev) => (prev ? { ...prev, bookmarklet_token } : prev));
+    } catch (e: any) {
+      setErr(e?.message || "Failed to regenerate token");
+    } finally {
+      setRegenerating(false);
+    }
+  }
+
+  const token = me?.bookmarklet_token || "";
+  const tokenParam = token ? `?token=${encodeURIComponent(token)}` : "";
+  const saveUrl = `${origin}/api/save${tokenParam}`;
+  const bookmarklet = token
+    ? `javascript:(()=>{window.open('${origin}/save?token=${encodeURIComponent(token)}&url='+encodeURIComponent(location.href),'browsefellow_save','width=420,height=220,top=100,left=100')})();`
+    : "";
+
   return (
     <div className="space-y-5">
+      <Card
+        title="Bookmarklet token"
+        hint="A long-lived secret tied to your account. The bookmarklet, the browser extension, and Shortcuts all use it to save pages without a full login each time. Keep it private — anyone with the token can save to (and list) your shelf."
+      >
+        {err && (
+          <p className="font-sans text-[13px] text-terracotta">{err}</p>
+        )}
+        {!me && !err && (
+          <p className="font-sans text-[13px] text-ink-muted">Loading…</p>
+        )}
+        {me && (
+          <>
+            <div className="flex items-center justify-between gap-3 rounded-lg border border-dashed border-rule bg-paper px-3 py-2.5">
+              <code className="min-w-0 flex-1 break-all font-mono text-[12px] text-ink">
+                {token}
+              </code>
+              <button
+                type="button"
+                onClick={() => copy(token, "token")}
+                className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-rule bg-paper-raised px-3 py-1.5 font-sans text-[12px] font-medium text-ink-muted hover:text-ink"
+              >
+                {copied === "token" ? (
+                  <>
+                    <Icon icon={Check} size={12} /> Copied
+                  </>
+                ) : (
+                  <>
+                    <Icon icon={Copy} size={12} /> Copy
+                  </>
+                )}
+              </button>
+            </div>
+            <button
+              type="button"
+              onClick={regenerate}
+              disabled={regenerating}
+              className="inline-flex items-center gap-1.5 rounded-md border border-rule bg-paper-raised px-3 py-1.5 font-sans text-[12px] font-medium text-ink-muted hover:text-ink disabled:opacity-60"
+            >
+              <Icon icon={RefreshCw} size={12} />
+              {regenerating ? "Regenerating…" : "Regenerate token"}
+            </button>
+          </>
+        )}
+      </Card>
+
       <Card
         title="iOS Share Sheet"
         hint="One-time Shortcuts setup so “Save to BrowseFellow” appears in the Share Sheet on your iPhone."
@@ -256,7 +333,8 @@ function SavePrefs() {
           <button
             type="button"
             onClick={() => copy(saveUrl, "save")}
-            className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-rule bg-paper-raised px-3 py-1.5 font-sans text-[12px] font-medium text-ink-muted hover:text-ink"
+            disabled={!token}
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-rule bg-paper-raised px-3 py-1.5 font-sans text-[12px] font-medium text-ink-muted hover:text-ink disabled:opacity-60"
           >
             {copied === "save" ? (
               <>
@@ -283,7 +361,7 @@ function SavePrefs() {
             Search and add{" "}
             <strong className="text-ink">Get Contents of URL</strong>.
           </li>
-          <li>Paste the save endpoint into the URL field.</li>
+          <li>Paste the save endpoint (including the token) into the URL field.</li>
           <li>
             Tap <strong className="text-ink">Show More</strong>. Set Method →
             POST, Request Body → JSON. Add a field: key{" "}
@@ -306,13 +384,19 @@ function SavePrefs() {
         title="Desktop bookmarklet"
         hint="Drag this to your browser’s bookmarks bar. Click on any page to save."
       >
-        <a
-          href={bookmarklet}
-          onClick={(e) => e.preventDefault()}
-          className="inline-flex items-center gap-2 rounded-pill bg-terracotta px-4 py-2 font-sans text-[13px] font-medium text-white shadow-pill hover:brightness-105"
-        >
-          Save to BrowseFellow
-        </a>
+        {token ? (
+          <a
+            href={bookmarklet}
+            onClick={(e) => e.preventDefault()}
+            className="inline-flex items-center gap-2 rounded-pill bg-terracotta px-4 py-2 font-sans text-[13px] font-medium text-white shadow-pill hover:brightness-105"
+          >
+            Save to BrowseFellow
+          </a>
+        ) : (
+          <p className="font-sans text-[13px] text-ink-muted">
+            Bookmarklet needs your token — waiting for account to load.
+          </p>
+        )}
       </Card>
 
       <Card

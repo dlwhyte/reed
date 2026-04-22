@@ -74,9 +74,12 @@ TOOLS = [
 SIMILARITY_THRESHOLD = 0.35
 
 
-async def _tool_search_library(query: str, limit: int = 5) -> dict:
+async def _tool_search_library(query: str, user_id: int, limit: int = 5) -> dict:
     query_vecs = await cohere_client.embed(
-        [query], input_type="search_query", endpoint="agent_search_library"
+        [query],
+        input_type="search_query",
+        endpoint="agent_search_library",
+        user_id=user_id,
     )
     if not query_vecs or not query_vecs[0]:
         return {"results": [], "total_library": 0, "note": "embedding failed"}
@@ -85,7 +88,8 @@ async def _tool_search_library(query: str, limit: int = 5) -> dict:
     with db.connect() as conn:
         rows = conn.execute(
             """SELECT id, title, site_name, url, excerpt, summary_short, embedding
-               FROM articles WHERE length(embedding) > 0"""
+               FROM articles WHERE user_id = ? AND length(embedding) > 0""",
+            (user_id,),
         ).fetchall()
 
     scored = []
@@ -129,11 +133,11 @@ async def _tool_search_library(query: str, limit: int = 5) -> dict:
     }
 
 
-async def _tool_read_article(article_id: int) -> dict:
+async def _tool_read_article(article_id: int, user_id: int) -> dict:
     with db.connect() as conn:
         row = conn.execute(
-            "SELECT id, title, site_name, url, author, content FROM articles WHERE id = ?",
-            (article_id,),
+            "SELECT id, title, site_name, url, author, content FROM articles WHERE id = ? AND user_id = ?",
+            (article_id, user_id),
         ).fetchone()
     if not row:
         return {"error": f"No article with id {article_id}"}
@@ -176,12 +180,14 @@ async def _tool_search_web(query: str, max_results: int = 5) -> list[dict]:
     ]
 
 
-async def _run_tool(name: str, args: dict):
+async def _run_tool(name: str, args: dict, user_id: int):
     try:
         if name == "search_library":
-            return await _tool_search_library(args.get("query", ""), int(args.get("limit", 5)))
+            return await _tool_search_library(
+                args.get("query", ""), user_id, int(args.get("limit", 5))
+            )
         if name == "read_article":
-            return await _tool_read_article(int(args.get("article_id")))
+            return await _tool_read_article(int(args.get("article_id")), user_id)
         if name == "search_web":
             return await _tool_search_web(args.get("query", ""), int(args.get("max_results", 5)))
         return {"error": f"Unknown tool: {name}"}
@@ -230,7 +236,7 @@ CITATION FORMAT — MANDATORY:
 - If you reference a piece but have no URL, do NOT cite it."""
 
 
-async def run_research(article_id: int, question: str) -> AsyncIterator[dict]:
+async def run_research(article_id: int, user_id: int, question: str) -> AsyncIterator[dict]:
     """Run the agent loop. Yields event dicts:
        {type: 'plan', text}
        {type: 'tool_call', name, args}
@@ -245,8 +251,8 @@ async def run_research(article_id: int, question: str) -> AsyncIterator[dict]:
 
     with db.connect() as conn:
         row = conn.execute(
-            "SELECT id, title, site_name, url, content FROM articles WHERE id = ?",
-            (article_id,),
+            "SELECT id, title, site_name, url, content FROM articles WHERE id = ? AND user_id = ?",
+            (article_id, user_id),
         ).fetchone()
     if not row:
         yield {"type": "error", "message": "Article not found"}
@@ -272,7 +278,9 @@ async def run_research(article_id: int, question: str) -> AsyncIterator[dict]:
             return
 
         inp, out = cohere_client._extract_tokens(resp)
-        cohere_client.record_usage("agent", config.COHERE_CHAT_MODEL, inp, out)
+        cohere_client.record_usage(
+            "agent", config.COHERE_CHAT_MODEL, inp, out, user_id=user_id
+        )
 
         msg = resp.message
         tool_calls = getattr(msg, "tool_calls", None) or []
@@ -306,7 +314,7 @@ async def run_research(article_id: int, question: str) -> AsyncIterator[dict]:
                     args = {}
                 yield {"type": "tool_call", "name": name, "args": args}
 
-                result = await _run_tool(name, args)
+                result = await _run_tool(name, args, user_id)
                 preview = json.dumps(result)[:500]
                 yield {"type": "tool_result", "name": name, "result_preview": preview}
 

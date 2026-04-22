@@ -34,7 +34,13 @@ os.environ["READER_ALLOW_PRIVATE_URLS"] = "true"
 
 @pytest.fixture
 def client(monkeypatch):
-    """FastAPI TestClient with a clean SQLite per test."""
+    """FastAPI TestClient with a clean SQLite + a seeded test user.
+
+    Bypasses Clerk JWT verification by overriding the `current_user` /
+    `current_user_or_bookmarklet` deps with a function that returns the
+    seeded row. Real JWT verification is exercised separately if/when we
+    add auth-specific tests.
+    """
     from fastapi.testclient import TestClient
 
     # Isolate this test's DB so state doesn't leak between tests. `db.py`
@@ -50,9 +56,33 @@ def client(monkeypatch):
     # Re-init schema against the fresh DB.
     db.init_db()
 
+    # Seed a single test user and surface it as the "current user" for
+    # every request.
+    with db.connect() as conn:
+        cur = conn.execute(
+            "INSERT INTO users (clerk_user_id, email, bookmarklet_token) "
+            "VALUES (?, ?, ?)",
+            ("test_user_clerk_id", "test@example.com", "test-bookmarklet-token"),
+        )
+        test_user = {
+            "id": cur.lastrowid,
+            "clerk_user_id": "test_user_clerk_id",
+            "email": "test@example.com",
+            "bookmarklet_token": "test-bookmarklet-token",
+        }
+
+    from app import auth
     from app.main import app
 
-    return TestClient(app)
+    app.dependency_overrides[auth.current_user] = lambda: test_user
+    app.dependency_overrides[auth.current_user_or_bookmarklet] = lambda: test_user
+
+    tc = TestClient(app)
+    tc.test_user = test_user  # type: ignore[attr-defined]
+    try:
+        yield tc
+    finally:
+        app.dependency_overrides.clear()
 
 
 @pytest.fixture

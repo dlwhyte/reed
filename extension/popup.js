@@ -1,4 +1,4 @@
-const BASE = "http://localhost:8765";
+const DEFAULT_BACKEND = "http://localhost:8765";
 
 const saveBtn = document.getElementById("save-btn");
 const saveBtnText = document.getElementById("save-btn-text");
@@ -6,10 +6,14 @@ const statusEl = document.getElementById("status");
 const statusLabel = document.getElementById("status-label");
 const statusDetail = document.getElementById("status-detail");
 const offlineWarning = document.getElementById("offline-warning");
+const setupWarning = document.getElementById("setup-warning");
 const recentsList = document.getElementById("recents-list");
 const tabTitleEl = document.getElementById("tab-title");
 const tabUrlEl = document.getElementById("tab-url");
 const tabFaviconEl = document.getElementById("tab-favicon");
+
+let BACKEND = DEFAULT_BACKEND;
+let API_TOKEN = "";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -38,11 +42,25 @@ function cleanHost(url) {
     }
 }
 
+function qs(extra) {
+    const p = new URLSearchParams({ token: API_TOKEN, ...(extra || {}) });
+    return `?${p}`;
+}
+
+async function loadSettings() {
+    const { backend, apiToken } = await chrome.storage.local.get([
+        "backend",
+        "apiToken",
+    ]);
+    BACKEND = (backend || DEFAULT_BACKEND).replace(/\/+$/, "");
+    API_TOKEN = apiToken || "";
+}
+
 // ── Backend health ───────────────────────────────────────────────────────────
 
 async function checkHealth() {
     try {
-        const res = await fetch(`${BASE}/api/health`, { signal: AbortSignal.timeout(2000) });
+        const res = await fetch(`${BACKEND}/api/health`, { signal: AbortSignal.timeout(2000) });
         return res.ok;
     } catch {
         return false;
@@ -68,7 +86,9 @@ async function loadCurrentTab() {
 
 async function loadRecents() {
     try {
-        const res = await fetch(`${BASE}/api/articles?state=unread&limit=5&sort=newest`);
+        const res = await fetch(
+            `${BACKEND}/api/articles${qs({ state: "unread", limit: "5", sort: "newest" })}`
+        );
         if (!res.ok) return;
         const articles = await res.json();
         recentsList.innerHTML = "";
@@ -82,7 +102,7 @@ async function loadRecents() {
         for (const a of articles.slice(0, 5)) {
             const item = document.createElement("a");
             item.className = "article-item";
-            item.href = `${BASE}/?article=${a.id}`;
+            item.href = `${BACKEND}/?article=${a.id}`;
             item.target = "_blank";
 
             const img = document.createElement("img");
@@ -133,7 +153,7 @@ async function saveCurrentTab() {
     }
 
     try {
-        const res = await fetch(`${BASE}/api/save`, {
+        const res = await fetch(`${BACKEND}/api/save${qs()}`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ url }),
@@ -164,7 +184,15 @@ async function saveCurrentTab() {
 // ── Init ─────────────────────────────────────────────────────────────────────
 
 (async () => {
+    await loadSettings();
     loadCurrentTab();
+
+    if (!API_TOKEN) {
+        setupWarning.style.display = "block";
+        saveBtn.disabled = true;
+        return;
+    }
+
     const online = await checkHealth();
     if (!online) {
         offlineWarning.style.display = "block";
@@ -175,3 +203,10 @@ async function saveCurrentTab() {
 })();
 
 saveBtn.addEventListener("click", saveCurrentTab);
+
+document.querySelectorAll("[data-open-options]").forEach((el) => {
+    el.addEventListener("click", (e) => {
+        e.preventDefault();
+        chrome.runtime.openOptionsPage();
+    });
+});

@@ -14,6 +14,7 @@
     "@capacitor/cli": "^6.2.1",
     "@capacitor/core": "^6.2.1",
     "@capacitor/ios": "^6.2.1",
+    "@clerk/clerk-react": "^5.14.0",
     "clsx": "^2.1.1",
     "lucide-react": "^0.454.0",
     "react": "^18.3.1",

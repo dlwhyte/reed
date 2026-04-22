@@ -18,3 +18,7 @@ DATA_DIR.mkdir(parents=True, exist_ok=True)
 DB_PATH = DATA_DIR / "reader.db"
 
 LLM_READY = ENABLE_LLM and bool(COHERE_API_KEY)
+
+CLERK_JWKS_URL = os.getenv("CLERK_JWKS_URL", "")
+CLERK_ISSUER = os.getenv("CLERK_ISSUER", "")
+AUTH_READY = bool(CLERK_JWKS_URL and CLERK_ISSUER)

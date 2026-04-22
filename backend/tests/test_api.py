@@ -169,10 +169,13 @@ def test_usage_empty(client):
 def test_usage_rollup_counts_and_dollars(client):
     from app import cohere_client
 
-    # Record a handful of calls across endpoints / models.
-    cohere_client.record_usage("save_summarize", "command-a-03-2025", 4000, 200)
-    cohere_client.record_usage("chat", "command-a-03-2025", 8000, 500)
-    cohere_client.record_usage("save_embed", "embed-english-v3.0", 2000, 0)
+    uid = client.test_user["id"]
+    # Record a handful of calls across endpoints / models, all attributed
+    # to the test user so the /api/usage rollup (which filters by user_id)
+    # picks them up.
+    cohere_client.record_usage("save_summarize", "command-a-03-2025", 4000, 200, user_id=uid)
+    cohere_client.record_usage("chat", "command-a-03-2025", 8000, 500, user_id=uid)
+    cohere_client.record_usage("save_embed", "embed-english-v3.0", 2000, 0, user_id=uid)
 
     u = client.get("/api/usage").json()
     month = u["month"]
