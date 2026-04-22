@@ -3,13 +3,13 @@ const DEFAULT_BACKEND = "http://localhost:8765";
 // Create context menu on install
 chrome.runtime.onInstalled.addListener(() => {
     chrome.contextMenus.create({
-          id: "reed-save-link",
-          title: "Save link to Reed",
+          id: "browsefellow-save-link",
+          title: "Save link to BrowseFellow",
           contexts: ["link"],
     });
     chrome.contextMenus.create({
-          id: "reed-save-page",
-          title: "Save page to Reed",
+          id: "browsefellow-save-page",
+          title: "Save page to BrowseFellow",
           contexts: ["page"],
     });
 });
@@ -17,7 +17,7 @@ chrome.runtime.onInstalled.addListener(() => {
 // Handle context menu clicks
 chrome.contextMenus.onClicked.addListener((info, tab) => {
     const url =
-          info.menuItemId === "reed-save-link"
+          info.menuItemId === "browsefellow-save-link"
         ? info.linkUrl
             : info.pageUrl;
     saveUrl(url);
@@ -73,7 +73,7 @@ async function saveUrl(url) {
                             ok: false,
                             duplicate: false,
                             title: url,
-                            error: "Could not reach Reed. Is the backend running?",
+                            error: "Could not reach BrowseFellow. Is the backend running?",
                             timestamp: Date.now(),
                   },
           });

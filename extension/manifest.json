@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "BrowseFellow",
-  "version": "1.0",
-  "description": "Save any page to your BrowseFellow shelf — a warm, local-first reading library.",
+  "version": "1.0.0",
+  "description": "Save any page to your BrowseFellow shelf — a warm reading library with highlights, tags, and optional AI summaries.",
   "permissions": ["activeTab", "contextMenus", "storage"],
   "host_permissions": ["http://localhost:8765/*"],
   "action": {
