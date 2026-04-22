@@ -252,6 +252,41 @@ def test_bookmarklet_unknown_token_rejected(raw_client):
     assert r.status_code == 401
 
 
+# --- A04 — Rate limiting --------------------------------------------------
+
+
+def test_rate_limit_kicks_in_on_save(client, fake_article, monkeypatch):
+    """Hammering /api/save past the per-minute limit must start returning
+    429 instead of letting requests through."""
+    from app import ratelimit
+
+    monkeypatch.setattr(ratelimit, "_ENABLED", True)
+    # Use a fresh bucket scoped just to this test so we don't interact
+    # with other tests' state.
+    tight = ratelimit.make_limiter(per_minute=300, burst=3)
+
+    from app.main import app, _save_limit
+
+    app.dependency_overrides[_save_limit] = tight
+
+    try:
+        ok = 0
+        rate_limited = 0
+        for i in range(8):
+            r = client.post("/api/save", json={"url": f"https://example.com/rl-{i}"})
+            if r.status_code == 200:
+                ok += 1
+            elif r.status_code == 429:
+                rate_limited += 1
+            else:
+                raise AssertionError(f"unexpected {r.status_code}: {r.text[:120]}")
+        # Burst=3 → first three succeed, the rest 429.
+        assert ok == 3, f"expected 3 successful saves before limit, got {ok}"
+        assert rate_limited == 5, f"expected 5 429s after limit, got {rate_limited}"
+    finally:
+        app.dependency_overrides.pop(_save_limit, None)
+
+
 def test_bookmarklet_token_rejected_on_clerk_only_endpoints(raw_client):
     """Endpoints that require a real Clerk session must NOT accept a
     bookmarklet token via ?token=. The bookmarklet token is intentionally
