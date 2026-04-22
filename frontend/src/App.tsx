@@ -10,6 +10,8 @@ import { CommandPalette } from "./components/CommandPalette";
 import { useStore } from "./store";
 import { setTokenGetter } from "./lib/api";
 
+const E2E_BYPASS = import.meta.env.VITE_E2E_BYPASS === "true";
+
 // Bridges Clerk's useAuth().getToken (only accessible inside the provider
 // tree) into the module-level api.ts token getter so fetch() calls can
 // attach Authorization headers without being React components.
@@ -44,18 +46,30 @@ export default function App() {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
+  const appRoutes = (
+    <>
+      <Routes>
+        <Route path="/" element={<Library />} />
+        <Route path="/read/:id" element={<Reader />} />
+        <Route path="/settings" element={<Settings />} />
+        <Route path="/tags" element={<Tags />} />
+        <Route path="/highlights" element={<Highlights />} />
+      </Routes>
+      {paletteOpen && <CommandPalette onClose={() => setPaletteOpen(false)} />}
+    </>
+  );
+
+  // E2E build skips Clerk entirely — the backend honors E2E_AUTH_BYPASS so
+  // requests don't need an Authorization header either.
+  if (E2E_BYPASS) {
+    return appRoutes;
+  }
+
   return (
     <>
       <SignedIn>
         <AuthBridge />
-        <Routes>
-          <Route path="/" element={<Library />} />
-          <Route path="/read/:id" element={<Reader />} />
-          <Route path="/settings" element={<Settings />} />
-          <Route path="/tags" element={<Tags />} />
-          <Route path="/highlights" element={<Highlights />} />
-        </Routes>
-        {paletteOpen && <CommandPalette onClose={() => setPaletteOpen(false)} />}
+        {appRoutes}
       </SignedIn>
       <SignedOut>
         <div

@@ -1,3 +1,4 @@
+import os
 import secrets
 import time
 from typing import Optional
@@ -10,6 +11,34 @@ from jwt import PyJWKClient
 from . import audit
 from .config import AUTH_READY, CLERK_ISSUER, CLERK_JWKS_URL
 from .db import connect
+
+
+# E2E bypass — only honored when Clerk is NOT configured (i.e. dev/test
+# environments). In prod, AUTH_READY is True because CLERK_JWKS_URL is
+# set, and this flag is ignored. Belt-and-braces: a stray env var on the
+# prod server can never disable auth.
+_E2E_BYPASS = (
+    os.getenv("E2E_AUTH_BYPASS", "false").lower() == "true" and not AUTH_READY
+)
+_E2E_USER_CLERK_ID = "e2e-user"
+
+
+def _e2e_user() -> dict:
+    """Return the seeded e2e user. Caller is expected to have inserted it
+    via frontend/e2e/seed_db.py before the test run."""
+    with connect() as conn:
+        row = conn.execute(
+            "SELECT id, clerk_user_id, email, bookmarklet_token "
+            "FROM users WHERE clerk_user_id = ?",
+            (_E2E_USER_CLERK_ID,),
+        ).fetchone()
+    if not row:
+        raise HTTPException(
+            status_code=500,
+            detail="E2E_AUTH_BYPASS=true but no e2e user seeded — "
+            "run frontend/e2e/seed_db.py first.",
+        )
+    return dict(row)
 
 
 _JWKS_CLIENT: Optional[PyJWKClient] = None
@@ -93,6 +122,8 @@ def _get_or_create_user(clerk_user_id: str, email: Optional[str]) -> dict:
 
 
 def current_user(request: Request) -> dict:
+    if _E2E_BYPASS:
+        return _e2e_user()
     token = _bearer_token(request)
     if not token:
         audit.record("missing_bearer", request)
@@ -112,6 +143,8 @@ def current_user(request: Request) -> dict:
 
 
 def current_user_or_bookmarklet(request: Request) -> dict:
+    if _E2E_BYPASS:
+        return _e2e_user()
     token = _bearer_token(request)
     if token:
         claims = _verify_clerk_jwt(token, request)
