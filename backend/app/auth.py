@@ -53,7 +53,10 @@ def _bearer_token(request: Request) -> Optional[str]:
     auth = request.headers.get("authorization") or request.headers.get("Authorization")
     if not auth or not auth.lower().startswith("bearer "):
         return None
-    return auth.split(None, 1)[1].strip() or None
+    parts = auth.split(None, 1)
+    if len(parts) < 2:
+        return None
+    return parts[1].strip() or None
 
 
 def _get_or_create_user(clerk_user_id: str, email: Optional[str]) -> dict:
