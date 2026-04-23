@@ -1,0 +1,36 @@
+{
+  "name": "@browsefellow/mcp",
+  "version": "0.1.0",
+  "description": "MCP server for BrowseFellow — lets Claude, Cursor, ChatGPT and other MCP-aware AI tools pull from your BrowseFellow reading library.",
+  "license": "MIT",
+  "author": "BrowseFellow",
+  "homepage": "https://browsefellow.com",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/dlwhyte/reed",
+    "directory": "mcp-server"
+  },
+  "keywords": ["mcp", "modelcontextprotocol", "browsefellow", "reader", "ai", "claude", "cursor"],
+  "type": "module",
+  "main": "./dist/index.js",
+  "bin": {
+    "browsefellow-mcp": "./dist/index.js"
+  },
+  "files": ["dist", "README.md", "LICENSE"],
+  "scripts": {
+    "build": "tsc",
+    "prepare": "npm run build",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.4",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^20.17.0",
+    "typescript": "^5.6.3"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
