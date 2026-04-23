@@ -121,6 +121,20 @@ export type Me = {
   quotas: { save: Quota; chat: Quota; research: Quota };
 };
 
+export type ApiToken = {
+  id: number;
+  name: string;
+  prefix: string;
+  last_used_at: string | null;
+  created_at: string;
+  revoked_at: string | null;
+};
+
+export type ApiTokenCreated = ApiToken & {
+  /** Present exactly once on creation; must be copied immediately. */
+  token: string;
+};
+
 export type AdminUser = {
   id: number;
   clerk_user_id: string;
@@ -171,6 +185,14 @@ export const api = {
       method: "PATCH",
       body: JSON.stringify({ tier }),
     }),
+  listApiTokens: () => j<ApiToken[]>("/me/api-tokens"),
+  createApiToken: (name: string) =>
+    j<ApiTokenCreated>("/me/api-tokens", {
+      method: "POST",
+      body: JSON.stringify({ name }),
+    }),
+  revokeApiToken: (tokenId: number) =>
+    j<{ ok: boolean }>(`/me/api-tokens/${tokenId}`, { method: "DELETE" }),
 };
 
 export async function* chatStream(

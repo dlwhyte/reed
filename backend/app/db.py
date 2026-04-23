@@ -102,6 +102,21 @@ CREATE TABLE IF NOT EXISTS auth_events (
 
 CREATE INDEX IF NOT EXISTS idx_auth_events_ts ON auth_events(ts);
 CREATE INDEX IF NOT EXISTS idx_auth_events_event ON auth_events(event);
+
+CREATE TABLE IF NOT EXISTS api_tokens (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    name TEXT NOT NULL,
+    token_hash TEXT UNIQUE NOT NULL,
+    prefix TEXT NOT NULL,
+    last_used_at TEXT,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    revoked_at TEXT,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_api_tokens_user ON api_tokens(user_id);
+CREATE INDEX IF NOT EXISTS idx_api_tokens_hash ON api_tokens(token_hash);
 """
 
 

@@ -2,19 +2,27 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { ArrowLeft, Check, Copy, RefreshCw } from "lucide-react";
 import { clsx } from "clsx";
-import { api, type Me, type UsageBucket, type UsageSnapshot } from "../lib/api";
+import {
+  api,
+  type ApiToken,
+  type ApiTokenCreated,
+  type Me,
+  type UsageBucket,
+  type UsageSnapshot,
+} from "../lib/api";
 import { useStore } from "../store";
 import { Wordmark } from "../components/primitives/Wordmark";
 import { Icon } from "../components/primitives/Icon";
 import { IconButton } from "../components/primitives/IconButton";
 import { PocketImport } from "../components/PocketImport";
 
-type TabId = "reader" | "save" | "plan" | "status" | "usage";
+type TabId = "reader" | "save" | "plan" | "ai-tools" | "status" | "usage";
 
 const TABS: { id: TabId; label: string }[] = [
   { id: "reader", label: "Reader" },
   { id: "save", label: "Save from anywhere" },
   { id: "plan", label: "Plan" },
+  { id: "ai-tools", label: "AI tools" },
   { id: "status", label: "Backend · models" },
   { id: "usage", label: "Cohere usage" },
 ];
@@ -74,6 +82,7 @@ export default function Settings() {
           {tab === "reader" && <ReaderPrefs prefs={prefs} setPrefs={setPrefs} />}
           {tab === "save" && <SavePrefs />}
           {tab === "plan" && <PlanPanel />}
+          {tab === "ai-tools" && <AIToolsPanel />}
           {tab === "status" && <StatusPanel cfg={cfg} health={health} />}
           {tab === "usage" && <UsagePanel />}
         </div>
@@ -514,6 +523,279 @@ function PlanPanel() {
           </Link>
         </Card>
       )}
+    </div>
+  );
+}
+
+
+function AIToolsPanel() {
+  const [tokens, setTokens] = useState<ApiToken[] | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const [newName, setNewName] = useState("");
+  const [creating, setCreating] = useState(false);
+  const [justCreated, setJustCreated] = useState<ApiTokenCreated | null>(null);
+  const [copied, setCopied] = useState<string | null>(null);
+
+  async function refresh() {
+    try {
+      setTokens(await api.listApiTokens());
+      setErr(null);
+    } catch (e: any) {
+      setErr(e?.message || "Failed to load tokens");
+    }
+  }
+  useEffect(() => {
+    refresh();
+  }, []);
+
+  async function create() {
+    if (!newName.trim()) return;
+    setCreating(true);
+    try {
+      const t = await api.createApiToken(newName.trim());
+      setJustCreated(t);
+      setNewName("");
+      await refresh();
+    } catch (e: any) {
+      alert(e?.message || "Failed to create token");
+    } finally {
+      setCreating(false);
+    }
+  }
+
+  async function revoke(id: number) {
+    if (!confirm("Revoke this token? Any AI tool using it will stop working.")) return;
+    try {
+      await api.revokeApiToken(id);
+      await refresh();
+    } catch (e: any) {
+      alert(e?.message || "Failed to revoke");
+    }
+  }
+
+  function copy(text: string, key: string) {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(key);
+      setTimeout(() => setCopied(null), 1400);
+    });
+  }
+
+  const token = justCreated?.token || "bft_PASTE_YOUR_TOKEN_HERE";
+  const origin =
+    typeof window !== "undefined" ? window.location.origin : "https://browsefellow.com";
+
+  const snippets: { id: string; tool: string; hint: string; config: string }[] = [
+    {
+      id: "claude-code",
+      tool: "Claude Code (CLI)",
+      hint: "Add to ~/.claude/mcp.json under mcpServers.",
+      config: JSON.stringify(
+        {
+          browsefellow: {
+            command: "npx",
+            args: ["-y", "@browsefellow/mcp"],
+            env: { BROWSEFELLOW_TOKEN: token, BROWSEFELLOW_URL: origin },
+          },
+        },
+        null,
+        2,
+      ),
+    },
+    {
+      id: "claude-ai",
+      tool: "Claude.ai (web)",
+      hint: "Settings → Connectors → Add Custom → paste URL + token.",
+      config: `URL:   ${origin}/api/agent\nToken: ${token}`,
+    },
+    {
+      id: "cursor",
+      tool: "Cursor",
+      hint: "Settings → MCP → Add new MCP server.",
+      config: JSON.stringify(
+        {
+          browsefellow: {
+            command: "npx",
+            args: ["-y", "@browsefellow/mcp"],
+            env: { BROWSEFELLOW_TOKEN: token, BROWSEFELLOW_URL: origin },
+          },
+        },
+        null,
+        2,
+      ),
+    },
+    {
+      id: "chatgpt",
+      tool: "ChatGPT (desktop)",
+      hint: "Settings → Connectors → Add MCP server.",
+      config: `URL:   ${origin}/api/agent\nToken: ${token}`,
+    },
+  ];
+
+  return (
+    <div className="space-y-5">
+      <Card
+        title="Connect to AI tools"
+        hint="Generate a token, paste the snippet into your AI tool of choice. The token grants read access to your library — so your AI can pull from what you've actually read."
+      >
+        {err && <p className="font-sans text-[13px] text-terracotta">{err}</p>}
+
+        {/* Create-token row */}
+        <div className="flex items-center gap-2">
+          <input
+            value={newName}
+            onChange={(e) => setNewName(e.target.value)}
+            placeholder="Name this token (e.g., Claude Code)"
+            className="flex-1 rounded-lg border border-rule bg-paper-raised px-3 py-2 font-sans text-[13px] text-ink placeholder:text-ink-faint outline-none focus:border-ink-muted"
+            maxLength={60}
+          />
+          <button
+            type="button"
+            onClick={create}
+            disabled={!newName.trim() || creating}
+            className="inline-flex items-center gap-1.5 rounded-pill bg-terracotta px-4 py-2 font-sans text-[13px] font-medium text-white shadow-pill hover:brightness-105 disabled:opacity-60"
+          >
+            {creating ? "Creating…" : "Create token"}
+          </button>
+        </div>
+
+        {/* Just-created warning + copy-once UI */}
+        {justCreated && (
+          <div className="rounded-lg border border-terracotta/40 bg-terracotta-soft/60 p-3">
+            <div className="mb-1 font-mono text-[10px] uppercase tracking-[0.12em] text-terracotta">
+              Copy now — this is the only time it's shown
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <code className="min-w-0 flex-1 break-all font-mono text-[12px] text-ink">
+                {justCreated.token}
+              </code>
+              <button
+                type="button"
+                onClick={() => copy(justCreated.token, "new")}
+                className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-rule bg-paper-raised px-3 py-1.5 font-sans text-[12px] font-medium text-ink-muted hover:text-ink"
+              >
+                {copied === "new" ? (
+                  <>
+                    <Icon icon={Check} size={12} /> Copied
+                  </>
+                ) : (
+                  <>
+                    <Icon icon={Copy} size={12} /> Copy
+                  </>
+                )}
+              </button>
+            </div>
+            <button
+              type="button"
+              onClick={() => setJustCreated(null)}
+              className="mt-2 font-mono text-[10px] uppercase tracking-[0.12em] text-ink-muted hover:text-ink"
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
+
+        {/* Token list */}
+        {tokens && tokens.length > 0 && (
+          <div className="overflow-hidden rounded-lg border border-rule">
+            <table className="w-full text-left text-[13px]">
+              <thead className="border-b border-rule bg-paper">
+                <tr className="font-mono text-[10px] uppercase tracking-[0.12em] text-ink-faint">
+                  <th className="px-3 py-2">Name</th>
+                  <th className="px-3 py-2">Prefix</th>
+                  <th className="px-3 py-2">Last used</th>
+                  <th className="px-3 py-2 text-right"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {tokens.map((t) => (
+                  <tr
+                    key={t.id}
+                    className={clsx(
+                      "border-b border-dashed border-rule last:border-none",
+                      t.revoked_at && "opacity-50",
+                    )}
+                  >
+                    <td className="px-3 py-2 font-sans text-ink">{t.name}</td>
+                    <td className="px-3 py-2 font-mono text-[11px] text-ink-muted">
+                      {t.prefix}…
+                    </td>
+                    <td className="px-3 py-2 font-mono text-[11px] text-ink-muted">
+                      {t.revoked_at
+                        ? "revoked"
+                        : t.last_used_at
+                        ? new Date(t.last_used_at).toLocaleString()
+                        : "never"}
+                    </td>
+                    <td className="px-3 py-2 text-right">
+                      {!t.revoked_at && (
+                        <button
+                          type="button"
+                          onClick={() => revoke(t.id)}
+                          className="font-sans text-[12px] text-terracotta hover:underline"
+                        >
+                          Revoke
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        {tokens && tokens.length === 0 && (
+          <p className="font-display text-[13px] italic text-ink-muted">
+            No tokens yet. Create one to connect an AI tool.
+          </p>
+        )}
+      </Card>
+
+      <Card
+        title="Setup snippets"
+        hint="Paste into the AI tool's MCP / Connector config. Replace the token placeholder with the real one from above."
+      >
+        <div className="space-y-4">
+          {snippets.map((s) => (
+            <div key={s.id} className="space-y-2">
+              <div className="flex items-baseline justify-between gap-2">
+                <div className="font-sans text-[13px] font-medium text-ink">
+                  {s.tool}
+                </div>
+                <div className="font-display text-[12px] italic text-ink-muted">
+                  {s.hint}
+                </div>
+              </div>
+              <div className="relative rounded-lg border border-rule bg-paper p-3">
+                <pre className="overflow-x-auto whitespace-pre-wrap break-all font-mono text-[11px] text-ink">
+                  {s.config}
+                </pre>
+                <button
+                  type="button"
+                  onClick={() => copy(s.config, s.id)}
+                  className="absolute right-2 top-2 inline-flex items-center gap-1.5 rounded-md border border-rule bg-paper-raised px-2 py-1 font-sans text-[11px] font-medium text-ink-muted hover:text-ink"
+                >
+                  {copied === s.id ? (
+                    <>
+                      <Icon icon={Check} size={11} /> Copied
+                    </>
+                  ) : (
+                    <>
+                      <Icon icon={Copy} size={11} /> Copy
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <p className="mt-1 font-display text-[13px] italic text-ink-muted">
+          The <code className="font-mono">@browsefellow/mcp</code> npm package
+          will be published separately — until then the MCP flow works by
+          pointing at the hosted MCP endpoint at{" "}
+          <code className="font-mono">{origin}/api/agent</code>.
+        </p>
+      </Card>
     </div>
   );
 }

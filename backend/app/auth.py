@@ -8,7 +8,7 @@ import jwt
 from fastapi import Depends, HTTPException, Request, status
 from jwt import PyJWKClient
 
-from . import audit
+from . import api_tokens, audit
 from .config import AUTH_READY, BOOTSTRAP_ADMIN_EMAIL, CLERK_ISSUER, CLERK_JWKS_URL
 from .db import connect
 
@@ -205,6 +205,44 @@ def current_user_or_bookmarklet(request: Request) -> dict:
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Missing bearer token or bookmarklet token",
     )
+
+
+def current_user_via_api_token(request: Request) -> dict:
+    """Auth dep for /api/agent/* endpoints. Accepts only a `bft_...` API
+    token in the Authorization header — NOT a Clerk JWT. Deliberately
+    narrow: external AI tools authenticate with API tokens, never with
+    the user's session cookie.
+
+    E2E bypass is honored same as `current_user` so tests work.
+    """
+    if _E2E_BYPASS:
+        return _e2e_user()
+
+    token = _bearer_token(request)
+    if not token:
+        audit.record("missing_bearer", request)
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Missing bearer token",
+        )
+    if not token.startswith(api_tokens.TOKEN_PREFIX):
+        audit.record("invalid_api_token", request, detail="wrong prefix")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid API token — expected a bft_… token for /api/agent.",
+        )
+    user = api_tokens.verify(token)
+    if not user:
+        audit.record(
+            "invalid_api_token",
+            request,
+            detail=token[: api_tokens.SHOWN_PREFIX_LEN] + "…",
+        )
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or revoked API token",
+        )
+    return user
 
 
 def regenerate_bookmarklet_token(user_id: int) -> str:
