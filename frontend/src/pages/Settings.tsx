@@ -9,11 +9,12 @@ import { Icon } from "../components/primitives/Icon";
 import { IconButton } from "../components/primitives/IconButton";
 import { PocketImport } from "../components/PocketImport";
 
-type TabId = "reader" | "save" | "status" | "usage";
+type TabId = "reader" | "save" | "plan" | "status" | "usage";
 
 const TABS: { id: TabId; label: string }[] = [
   { id: "reader", label: "Reader" },
   { id: "save", label: "Save from anywhere" },
+  { id: "plan", label: "Plan" },
   { id: "status", label: "Backend · models" },
   { id: "usage", label: "Cohere usage" },
 ];
@@ -72,6 +73,7 @@ export default function Settings() {
         <div className="mt-7">
           {tab === "reader" && <ReaderPrefs prefs={prefs} setPrefs={setPrefs} />}
           {tab === "save" && <SavePrefs />}
+          {tab === "plan" && <PlanPanel />}
           {tab === "status" && <StatusPanel cfg={cfg} health={health} />}
           {tab === "usage" && <UsagePanel />}
         </div>
@@ -408,6 +410,114 @@ function SavePrefs() {
     </div>
   );
 }
+
+function PlanPanel() {
+  const [me, setMe] = useState<Me | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+
+  useEffect(() => {
+    api.me().then(setMe).catch((e) => setErr(e?.message || "Failed to load plan"));
+  }, []);
+
+  if (err) {
+    return (
+      <Card title="Your plan" hint="What you can do, and how much you've done this month.">
+        <p className="font-sans text-[13px] text-terracotta">{err}</p>
+      </Card>
+    );
+  }
+  if (!me) {
+    return (
+      <Card title="Your plan" hint="What you can do, and how much you've done this month.">
+        <p className="font-sans text-[13px] text-ink-muted">Loading…</p>
+      </Card>
+    );
+  }
+
+  const isAdmin = me.tier === "admin";
+  const quotaRows: { label: string; key: keyof Me["quotas"] }[] = [
+    { label: "Saves", key: "save" },
+    { label: "Chat turns", key: "chat" },
+    { label: "Research runs", key: "research" },
+  ];
+
+  return (
+    <div className="space-y-5">
+      <Card title="Your plan" hint="Tier-based feature access. Caps reset on the 1st of each month.">
+        <div className="flex items-center gap-3">
+          <span
+            className={clsx(
+              "inline-flex items-center rounded-pill px-3 py-1 font-mono text-[10px] uppercase tracking-[0.12em]",
+              me.tier === "admin"
+                ? "bg-ink text-paper"
+                : me.tier === "plus"
+                ? "bg-terracotta text-white"
+                : "bg-rule/60 text-ink",
+            )}
+          >
+            {me.tier_label}
+          </span>
+          <span className="font-display text-[14px] italic text-ink-muted">
+            {me.tier === "free"
+              ? "Reader, semantic search, and AI summaries on save."
+              : me.tier === "plus"
+              ? "Adds Chat with article and the Research agent."
+              : "Owner — everything unlimited."}
+          </span>
+        </div>
+
+        <div className="mt-4 grid grid-cols-3 gap-3">
+          {quotaRows.map(({ label, key }) => {
+            const q = me.quotas[key];
+            const cap = q.cap;
+            const pct = cap ? Math.min(100, (q.used / cap) * 100) : 0;
+            return (
+              <div key={key} className="rounded-lg border border-rule bg-paper p-3">
+                <div className="font-mono text-[10px] uppercase tracking-[0.12em] text-ink-faint">
+                  {label}
+                </div>
+                <div className="mt-1 font-display text-[18px] font-semibold leading-tight text-ink">
+                  {cap === null ? "∞" : `${q.used} / ${cap}`}
+                </div>
+                {cap !== null && cap > 0 && (
+                  <div className="mt-2 h-1 w-full overflow-hidden rounded-full bg-rule/40">
+                    <div
+                      className="h-full bg-terracotta"
+                      style={{ width: `${Math.max(2, pct)}%` }}
+                    />
+                  </div>
+                )}
+                {cap === 0 && (
+                  <div className="mt-1 font-mono text-[10px] uppercase tracking-[0.12em] text-ink-faint">
+                    Plus only
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        {!isAdmin && (
+          <p className="mt-1 font-display text-[13px] italic text-ink-muted">
+            Plus is invite-only.
+          </p>
+        )}
+      </Card>
+
+      {isAdmin && (
+        <Card title="Admin" hint="Tools that only show up for admin tier.">
+          <Link
+            to="/admin"
+            className="inline-flex items-center gap-2 rounded-pill bg-ink px-4 py-2 font-sans text-[13px] font-medium text-paper hover:opacity-90"
+          >
+            Manage users →
+          </Link>
+        </Card>
+      )}
+    </div>
+  );
+}
+
 
 function StatusPanel({ cfg, health }: { cfg: any; health: any }) {
   const rows: { label: string; value: React.ReactNode }[] = [

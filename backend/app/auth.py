@@ -9,7 +9,7 @@ from fastapi import Depends, HTTPException, Request, status
 from jwt import PyJWKClient
 
 from . import audit
-from .config import AUTH_READY, CLERK_ISSUER, CLERK_JWKS_URL
+from .config import AUTH_READY, BOOTSTRAP_ADMIN_EMAIL, CLERK_ISSUER, CLERK_JWKS_URL
 from .db import connect
 
 
@@ -28,7 +28,7 @@ def _e2e_user() -> dict:
     via frontend/e2e/seed_db.py before the test run."""
     with connect() as conn:
         row = conn.execute(
-            "SELECT id, clerk_user_id, email, bookmarklet_token "
+            "SELECT id, clerk_user_id, email, bookmarklet_token, tier "
             "FROM users WHERE clerk_user_id = ?",
             (_E2E_USER_CLERK_ID,),
         ).fetchone()
@@ -96,28 +96,54 @@ def _bearer_token(request: Request) -> Optional[str]:
     return parts[1].strip() or None
 
 
+def _should_bootstrap_admin(email: Optional[str]) -> bool:
+    if not BOOTSTRAP_ADMIN_EMAIL or not email:
+        return False
+    return email.strip().lower() == BOOTSTRAP_ADMIN_EMAIL
+
+
 def _get_or_create_user(clerk_user_id: str, email: Optional[str]) -> dict:
     with connect() as conn:
         row = conn.execute(
-            "SELECT id, clerk_user_id, email, bookmarklet_token FROM users WHERE clerk_user_id = ?",
+            "SELECT id, clerk_user_id, email, bookmarklet_token, tier FROM users WHERE clerk_user_id = ?",
             (clerk_user_id,),
         ).fetchone()
         if row:
+            updates = []
+            params: list = []
             if email and row["email"] != email:
+                updates.append("email = ?")
+                params.append(email)
+            new_tier = row["tier"]
+            if _should_bootstrap_admin(email) and row["tier"] != "admin":
+                updates.append("tier = 'admin'")
+                new_tier = "admin"
+            if updates:
+                params.append(row["id"])
                 conn.execute(
-                    "UPDATE users SET email = ? WHERE id = ?", (email, row["id"])
+                    f"UPDATE users SET {', '.join(updates)} WHERE id = ?",
+                    tuple(params),
                 )
-            return dict(row)
+            return {
+                "id": row["id"],
+                "clerk_user_id": row["clerk_user_id"],
+                "email": email or row["email"],
+                "bookmarklet_token": row["bookmarklet_token"],
+                "tier": new_tier,
+            }
         bookmarklet_token = secrets.token_urlsafe(24)
+        tier = "admin" if _should_bootstrap_admin(email) else "free"
         cur = conn.execute(
-            "INSERT INTO users (clerk_user_id, email, bookmarklet_token) VALUES (?, ?, ?)",
-            (clerk_user_id, email, bookmarklet_token),
+            "INSERT INTO users (clerk_user_id, email, bookmarklet_token, tier) "
+            "VALUES (?, ?, ?, ?)",
+            (clerk_user_id, email, bookmarklet_token, tier),
         )
         return {
             "id": cur.lastrowid,
             "clerk_user_id": clerk_user_id,
             "email": email,
             "bookmarklet_token": bookmarklet_token,
+            "tier": tier,
         }
 
 
@@ -161,7 +187,7 @@ def current_user_or_bookmarklet(request: Request) -> dict:
     if bm:
         with connect() as conn:
             row = conn.execute(
-                "SELECT id, clerk_user_id, email, bookmarklet_token FROM users WHERE bookmarklet_token = ?",
+                "SELECT id, clerk_user_id, email, bookmarklet_token, tier FROM users WHERE bookmarklet_token = ?",
                 (bm,),
             ).fetchone()
             if row:

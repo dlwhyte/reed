@@ -52,18 +52,24 @@ def db_setup(monkeypatch):
 
     db.init_db()
 
-    def seed_user(clerk_id: str, email: str, bookmarklet_token: str) -> dict:
+    def seed_user(
+        clerk_id: str,
+        email: str,
+        bookmarklet_token: str,
+        tier: str = "free",
+    ) -> dict:
         with db.connect() as conn:
             cur = conn.execute(
-                "INSERT INTO users (clerk_user_id, email, bookmarklet_token) "
-                "VALUES (?, ?, ?)",
-                (clerk_id, email, bookmarklet_token),
+                "INSERT INTO users (clerk_user_id, email, bookmarklet_token, tier) "
+                "VALUES (?, ?, ?, ?)",
+                (clerk_id, email, bookmarklet_token, tier),
             )
             return {
                 "id": cur.lastrowid,
                 "clerk_user_id": clerk_id,
                 "email": email,
                 "bookmarklet_token": bookmarklet_token,
+                "tier": tier,
             }
 
     return seed_user
@@ -80,7 +86,7 @@ def client(db_setup):
     from fastapi.testclient import TestClient
 
     test_user = db_setup(
-        "test_user_clerk_id", "test@example.com", "test-bookmarklet-token"
+        "test_user_clerk_id", "test@example.com", "test-bookmarklet-token", tier="admin"
     )
 
     from app import auth
@@ -108,8 +114,8 @@ def two_clients(db_setup):
     """
     from fastapi.testclient import TestClient
 
-    alice = db_setup("alice_clerk", "alice@example.com", "alice-bookmarklet")
-    bob = db_setup("bob_clerk", "bob@example.com", "bob-bookmarklet")
+    alice = db_setup("alice_clerk", "alice@example.com", "alice-bookmarklet", tier="admin")
+    bob = db_setup("bob_clerk", "bob@example.com", "bob-bookmarklet", tier="admin")
 
     from app import auth
     from app.main import app

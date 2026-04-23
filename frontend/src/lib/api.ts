@@ -102,11 +102,34 @@ export type UsageSnapshot = {
   pricing: Record<string, { input: number; output: number }>;
 };
 
+export type Tier = "free" | "plus" | "admin";
+
+export type Quota = {
+  cap: number | null;     // null = unlimited
+  used: number;
+  remaining: number | null;
+};
+
 export type Me = {
   id: number;
   clerk_user_id: string;
   email: string | null;
   bookmarklet_token: string;
+  tier: Tier;
+  tier_label: string;
+  features: { chat: boolean; research: boolean };
+  quotas: { save: Quota; chat: Quota; research: Quota };
+};
+
+export type AdminUser = {
+  id: number;
+  clerk_user_id: string;
+  email: string | null;
+  tier: Tier;
+  created_at: string;
+  saves_this_month: number;
+  chats_this_month: number;
+  research_this_month: number;
 };
 
 export const api = {
@@ -142,6 +165,12 @@ export const api = {
     }),
   removeHighlight: (highlightId: number) =>
     j<{ ok: boolean }>(`/highlights/${highlightId}`, { method: "DELETE" }),
+  adminListUsers: () => j<AdminUser[]>("/admin/users"),
+  adminSetTier: (userId: number, tier: Tier) =>
+    j<{ ok: boolean; id: number; tier: Tier }>(`/admin/users/${userId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ tier }),
+    }),
 };
 
 export async function* chatStream(

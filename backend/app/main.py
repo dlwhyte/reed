@@ -14,7 +14,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, HTMLResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from . import config, db, extractor, cohere_client, agent
+from . import config, db, extractor, cohere_client, agent, tiers
 from .auth import (
     current_user,
     current_user_or_bookmarklet,
@@ -136,11 +136,23 @@ def health():
 
 @app.get("/api/me")
 def me(user: dict = Depends(current_user)):
+    tier_def = tiers.tier_of(user)
     return {
         "id": user["id"],
         "clerk_user_id": user["clerk_user_id"],
         "email": user["email"],
         "bookmarklet_token": user["bookmarklet_token"],
+        "tier": user.get("tier") or tiers.DEFAULT_TIER,
+        "tier_label": tier_def["label"],
+        "features": tier_def["features"],
+        "quotas": {
+            kind: {
+                "cap": tiers.cap_for(user, kind),
+                "used": tiers.usage_this_month(user["id"], kind),
+                "remaining": tiers.remaining(user, kind),
+            }
+            for kind in ("save", "chat", "research")
+        },
     }
 
 
@@ -150,6 +162,52 @@ def regenerate_token(
     _: None = Depends(_regen_limit),
 ):
     return {"bookmarklet_token": regenerate_bookmarklet_token(user["id"])}
+
+
+# --- Admin endpoints (tier='admin' only) ----------------------------------
+
+
+class TierUpdateReq(BaseModel):
+    tier: str
+
+
+@app.get("/api/admin/users")
+def admin_list_users(_: dict = Depends(tiers.require_admin())):
+    with db.connect() as conn:
+        rows = conn.execute(
+            "SELECT id, clerk_user_id, email, tier, created_at FROM users ORDER BY id"
+        ).fetchall()
+    out = []
+    for r in rows:
+        d = dict(r)
+        d["saves_this_month"] = tiers.usage_this_month(r["id"], "save")
+        d["chats_this_month"] = tiers.usage_this_month(r["id"], "chat")
+        d["research_this_month"] = tiers.usage_this_month(r["id"], "research")
+        out.append(d)
+    return out
+
+
+@app.patch("/api/admin/users/{user_id}")
+def admin_update_user(
+    user_id: int,
+    req: TierUpdateReq,
+    admin: dict = Depends(tiers.require_admin()),
+):
+    if req.tier not in tiers.TIERS:
+        raise HTTPException(
+            400, f"Unknown tier '{req.tier}'. Valid: {', '.join(tiers.TIERS.keys())}"
+        )
+    if user_id == admin["id"] and req.tier != "admin":
+        raise HTTPException(
+            400, "Refusing to demote yourself — promote another admin first."
+        )
+    with db.connect() as conn:
+        cur = conn.execute(
+            "UPDATE users SET tier = ? WHERE id = ?", (req.tier, user_id)
+        )
+    if cur.rowcount == 0:
+        raise HTTPException(404, "User not found")
+    return {"ok": True, "id": user_id, "tier": req.tier}
 
 
 async def _save_article(user_id: int, url: str) -> dict:
@@ -223,10 +281,12 @@ async def _save_article(user_id: int, url: str) -> dict:
 async def save(
     req: SaveReq,
     user: dict = Depends(current_user_or_bookmarklet),
-    _: None = Depends(_save_limit),
+    _rl: None = Depends(_save_limit),
 ):
     # Accepts either a Clerk JWT (frontend) or ?token=<bookmarklet_token>
-    # (extension / bookmarklet).
+    # (extension / bookmarklet). Save cap (200/mo on free, unlimited on
+    # plus/admin) enforced inline so we don't re-trigger auth.
+    tiers.check_save_cap(user)
     return await _save_article(user["id"], req.url)
 
 
@@ -236,8 +296,9 @@ async def share_target(
     url: str | None = None,
     text: str | None = None,
     title: str | None = None,
-    _: None = Depends(_share_limit),
+    _rl: None = Depends(_share_limit),
 ):
+    tiers.check_save_cap(user)
     """Web Share Target endpoint (PWA share_target spec).
     Extracts a URL from url/text/title fields and saves it, then redirects to library."""
     import re as _re
@@ -269,10 +330,11 @@ async def share_target(
 async def save_via_get(
     url: str,
     user: dict = Depends(current_user_or_bookmarklet),
-    _: None = Depends(_share_limit),
+    _rl: None = Depends(_share_limit),
 ):
     """GET save endpoint for the bookmarklet (works from HTTPS pages via popup).
     Auth via Clerk bearer OR ?token=<bookmarklet_token>."""
+    tiers.check_save_cap(user)
     return await _save_via_get_impl(user["id"], url)
 
 
@@ -565,6 +627,7 @@ async def chat(
     user: dict = Depends(current_user),
     _: None = Depends(_chat_limit),
 ):
+    tiers.check_feature_and_cap(user, "chat")
     with db.connect() as conn:
         row = conn.execute(
             "SELECT title, content FROM articles WHERE id = ? AND user_id = ?",
@@ -594,6 +657,12 @@ async def research(
     user: dict = Depends(current_user),
     _: None = Depends(_research_limit),
 ):
+    tiers.check_feature_and_cap(user, "research")
+    # Mark a research-run counter row up front so the cap counts whole
+    # user-initiated runs, not the per-step 'agent' rows the agent loop
+    # writes for each LLM call.
+    tiers.mark_research_run(user["id"])
+
     async def event_stream():
         try:
             async for event in agent.run_research(article_id, user["id"], req.question):

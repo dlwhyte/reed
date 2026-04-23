@@ -22,3 +22,8 @@ LLM_READY = ENABLE_LLM and bool(COHERE_API_KEY)
 CLERK_JWKS_URL = os.getenv("CLERK_JWKS_URL", "")
 CLERK_ISSUER = os.getenv("CLERK_ISSUER", "")
 AUTH_READY = bool(CLERK_JWKS_URL and CLERK_ISSUER)
+
+# Any user whose email matches this is auto-promoted to the `admin` tier
+# the first time they sign in (and on every subsequent login if their tier
+# was ever demoted). Lets you bootstrap admin without an SSH session.
+BOOTSTRAP_ADMIN_EMAIL = os.getenv("BOOTSTRAP_ADMIN_EMAIL", "").strip().lower() or None

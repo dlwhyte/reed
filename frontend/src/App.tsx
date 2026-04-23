@@ -6,6 +6,7 @@ import Reader from "./pages/Reader";
 import Settings from "./pages/Settings";
 import Tags from "./pages/Tags";
 import Highlights from "./pages/Highlights";
+import Admin from "./pages/Admin";
 import { CommandPalette } from "./components/CommandPalette";
 import { useStore } from "./store";
 import { setTokenGetter } from "./lib/api";
@@ -54,6 +55,7 @@ export default function App() {
         <Route path="/settings" element={<Settings />} />
         <Route path="/tags" element={<Tags />} />
         <Route path="/highlights" element={<Highlights />} />
+        <Route path="/admin" element={<Admin />} />
       </Routes>
       {paletteOpen && <CommandPalette onClose={() => setPaletteOpen(false)} />}
     </>
