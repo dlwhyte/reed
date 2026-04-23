@@ -1,0 +1,187 @@
+openapi: 3.1.0
+info:
+  title: BrowseFellow Agent API
+  version: 0.1.0
+  description: |
+    Read-only access to a BrowseFellow user's reading library — saved
+    articles, highlights, and embeddings. Intended for AI tools
+    (Custom GPTs, ChatGPT Connectors, developer integrations) that
+    want to ground their answers in what the user has actually read.
+
+    Authentication: create an API token in BrowseFellow → Settings →
+    AI tools. Tokens are prefixed `bft_`.
+
+    All responses are scoped to the token's owner. A token never sees
+    another user's data.
+  contact:
+    name: BrowseFellow
+    url: https://browsefellow.com
+    email: dlwhyte@gmail.com
+  license:
+    name: MIT
+servers:
+  - url: https://browsefellow.com
+    description: Production
+security:
+  - bearerAuth: []
+paths:
+  /api/agent/search:
+    get:
+      operationId: searchLibrary
+      summary: Search the user's saved articles
+      description: |
+        Semantic (if LLM is enabled) or keyword search over the
+        user's library. Each article result includes its highlights
+        inline so a single call gives you the gist of a topic.
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema: { type: string }
+          description: Natural-language search query
+        - name: limit
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 25, default: 10 }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SearchResult"
+        "401": { description: Missing or invalid API token }
+
+  /api/agent/article/{article_id}:
+    get:
+      operationId: getArticle
+      summary: Get the full text + highlights for one article
+      description: |
+        Returns the article's readable text (truncated to 8 KB),
+        metadata, and all highlights the user has made on it.
+      parameters:
+        - name: article_id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ArticleFull"
+        "404": { description: Article not found (or belongs to a different user) }
+        "401": { description: Missing or invalid API token }
+
+  /api/agent/highlights:
+    get:
+      operationId: searchHighlights
+      summary: Search or list the user's highlights
+      description: |
+        Highlights are often more useful than article text because
+        they're passages the user deliberately selected. Leave `q`
+        empty to get the most-recent highlights.
+      parameters:
+        - name: q
+          in: query
+          required: false
+          schema: { type: string }
+        - name: limit
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 50, default: 20 }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HighlightsResult"
+        "401": { description: Missing or invalid API token }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: bft_xxx
+  schemas:
+    ArticleSummary:
+      type: object
+      properties:
+        id: { type: integer }
+        title: { type: string }
+        url: { type: string, format: uri }
+        site_name: { type: string, nullable: true }
+        excerpt: { type: string }
+        summary: { type: string, nullable: true }
+        tags:
+          type: array
+          items: { type: string }
+        created_at: { type: string, format: date-time }
+        similarity: { type: number, nullable: true }
+        highlights:
+          type: array
+          items: { $ref: "#/components/schemas/InlineHighlight" }
+
+    InlineHighlight:
+      type: object
+      properties:
+        text: { type: string }
+        note: { type: string, nullable: true }
+
+    ArticleFull:
+      type: object
+      properties:
+        id: { type: integer }
+        title: { type: string }
+        url: { type: string, format: uri }
+        site_name: { type: string, nullable: true }
+        author: { type: string, nullable: true }
+        published: { type: string, nullable: true }
+        excerpt: { type: string, nullable: true }
+        summary_short: { type: string, nullable: true }
+        summary_long: { type: string, nullable: true }
+        tags:
+          type: array
+          items: { type: string }
+        word_count: { type: integer }
+        read_time_min: { type: integer }
+        created_at: { type: string, format: date-time }
+        content: { type: string }
+        content_truncated: { type: boolean }
+        highlights:
+          type: array
+          items: { $ref: "#/components/schemas/InlineHighlight" }
+
+    SearchResult:
+      type: object
+      properties:
+        query: { type: string }
+        count: { type: integer }
+        results:
+          type: array
+          items: { $ref: "#/components/schemas/ArticleSummary" }
+
+    HighlightsResult:
+      type: object
+      properties:
+        query: { type: string }
+        count: { type: integer }
+        results:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: integer }
+              text: { type: string }
+              note: { type: string, nullable: true }
+              created_at: { type: string, format: date-time }
+              article:
+                type: object
+                properties:
+                  id: { type: integer }
+                  title: { type: string }
+                  url: { type: string, format: uri }
+                  site_name: { type: string, nullable: true }
