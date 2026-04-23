@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { ArrowLeft, Check, Copy, RefreshCw } from "lucide-react";
+import { ArrowLeft, Check, Copy, LogOut, RefreshCw } from "lucide-react";
 import { clsx } from "clsx";
+import { useClerk, useUser } from "@clerk/clerk-react";
 import {
   api,
   type ApiToken,
@@ -60,6 +61,8 @@ export default function Settings() {
           Reader defaults, save shortcuts, and what’s wired up in the backend.
         </p>
 
+        <AccountRow />
+
         <nav className="mt-6 flex gap-1.5 border-b border-dashed border-rule">
           {TABS.map((t) => (
             <button
@@ -87,6 +90,42 @@ export default function Settings() {
           {tab === "usage" && <UsagePanel />}
         </div>
       </div>
+    </div>
+  );
+}
+
+function AccountRow() {
+  const { user } = useUser();
+  const { signOut } = useClerk();
+  const [signingOut, setSigningOut] = useState(false);
+  if (!user) return null;
+  const email = user.primaryEmailAddress?.emailAddress || user.emailAddresses?.[0]?.emailAddress || "";
+  async function handleSignOut() {
+    if (!confirm("Sign out of BrowseFellow on this device?")) return;
+    setSigningOut(true);
+    try {
+      await signOut({ redirectUrl: "/" });
+    } catch {
+      setSigningOut(false);
+    }
+  }
+  return (
+    <div className="mt-5 flex items-center justify-between gap-3 rounded-lg border border-dashed border-rule bg-paper-raised px-4 py-3">
+      <div className="min-w-0">
+        <div className="font-mono text-[10px] uppercase tracking-[0.12em] text-ink-faint">
+          Signed in as
+        </div>
+        <div className="truncate font-sans text-[14px] text-ink">{email}</div>
+      </div>
+      <button
+        type="button"
+        onClick={handleSignOut}
+        disabled={signingOut}
+        className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-rule bg-paper px-3 py-1.5 font-sans text-[12px] font-medium text-ink-muted hover:text-ink disabled:opacity-60"
+      >
+        <Icon icon={LogOut} size={12} />
+        {signingOut ? "Signing out…" : "Sign out"}
+      </button>
     </div>
   );
 }
