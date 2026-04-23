@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { ChevronDown, Filter, Search, Sparkles, X } from "lucide-react";
 import { clsx } from "clsx";
 import { Article, api } from "../lib/api";
@@ -255,6 +255,8 @@ export default function Library() {
           </div>
         )}
 
+        {articles.length >= 3 && !q && <MCPTip />}
+
         <div className="mt-7">
           {loading ? (
             <LibrarySkeleton density={density} />
@@ -424,6 +426,52 @@ function LoadingRow() {
         <span className="bf-dot" />
         <span className="bf-dot" />
       </div>
+    </div>
+  );
+}
+
+function MCPTip() {
+  const [dismissed, setDismissed] = useState(() => {
+    try {
+      return localStorage.getItem("browsefellow.mcp_tip_dismissed") === "1";
+    } catch {
+      return false;
+    }
+  });
+  if (dismissed) return null;
+  return (
+    <div className="mt-5 flex items-start gap-3 rounded-lg border border-dashed border-rule bg-paper-raised px-4 py-3">
+      <div className="flex-1">
+        <div className="font-mono text-[10px] uppercase tracking-[0.14em] text-terracotta">
+          Tip · AI tools
+        </div>
+        <p className="mt-1 font-display text-[14px] text-ink [text-wrap:pretty]">
+          Connect your shelf to Claude, Cursor, or ChatGPT — ask{" "}
+          <em className="italic">“what have I read about…?”</em> and get answers
+          from your own reading.{" "}
+          <Link
+            to="/settings"
+            className="text-terracotta hover:underline"
+          >
+            Set it up →
+          </Link>
+        </p>
+      </div>
+      <button
+        type="button"
+        onClick={() => {
+          try {
+            localStorage.setItem("browsefellow.mcp_tip_dismissed", "1");
+          } catch {
+            /* noop */
+          }
+          setDismissed(true);
+        }}
+        aria-label="Dismiss tip"
+        className="shrink-0 rounded-md p-1 text-ink-faint hover:text-ink"
+      >
+        <Icon icon={X} size={14} />
+      </button>
     </div>
   );
 }

@@ -751,6 +751,28 @@ function AIToolsPanel() {
       </Card>
 
       <Card
+        title="Try asking"
+        hint="Once connected, these are the kinds of prompts that work well. The AI tool decides when to call search_library / get_article / search_highlights — you just ask normally."
+      >
+        <ul className="space-y-2">
+          {[
+            "What have I read about attention spans?",
+            "Summarize the highlights I made this week.",
+            "Find the article where someone argued against remote work.",
+            "Based on what I've saved lately, what should I read next?",
+            "Pull quotes from my shelf about AI agents, with citations.",
+          ].map((p) => (
+            <li
+              key={p}
+              className="rounded-lg border border-dashed border-rule bg-paper px-3 py-2 font-display text-[14px] italic text-ink [text-wrap:pretty]"
+            >
+              “{p}”
+            </li>
+          ))}
+        </ul>
+      </Card>
+
+      <Card
         title="Setup snippets"
         hint="Paste into the AI tool's MCP / Connector config. Replace the token placeholder with the real one from above."
       >

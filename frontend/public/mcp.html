@@ -98,6 +98,63 @@
         color: var(--terracotta);
       }
       .back { display: inline-block; margin-top: 48px; font-size: 13px; color: var(--ink-muted); }
+      .demo {
+        margin: 28px 0 8px;
+        border: 1px dashed var(--rule);
+        border-radius: 10px;
+        background: var(--paper-raised);
+        aspect-ratio: 16 / 9;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        color: var(--ink-faint);
+        font-family: "Source Serif 4", Georgia, serif;
+        font-style: italic;
+        font-size: 14px;
+        text-align: center;
+        padding: 0;
+        overflow: hidden;
+      }
+      .demo img {
+        display: block;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+      }
+      .demo .placeholder {
+        padding: 24px;
+      }
+      .demo small {
+        display: block;
+        margin-top: 6px;
+        font-family: ui-monospace, SFMono-Regular, monospace;
+        font-style: normal;
+        font-size: 11px;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: var(--ink-faint);
+      }
+      .demo figcaption {
+        margin-top: 8px;
+        font-family: "Source Serif 4", Georgia, serif;
+        font-style: italic;
+        font-size: 13px;
+        color: var(--ink-muted);
+        text-align: center;
+      }
+      .prompts { list-style: none; padding: 0; margin: 8px 0 0; }
+      .prompts li {
+        border: 1px dashed var(--rule);
+        background: var(--paper-raised);
+        border-radius: 8px;
+        padding: 10px 14px;
+        margin: 8px 0;
+        font-family: "Source Serif 4", Georgia, serif;
+        font-style: italic;
+        font-size: 15px;
+        color: var(--ink);
+      }
     </style>
   </head>
   <body>
@@ -121,6 +178,42 @@
       <em>"what have I been reading about attention spans?"</em> and it
       answers from your library, citing specific articles and your own
       highlights.
+    </p>
+
+    <!--
+      TODO: replace with a real screenshot.
+      Composition (one frame, 16:9, ~1600×900 or larger):
+        - Claude Desktop window (or claude.ai) on the left showing an answer
+          that cites 2–3 articles from the user's BrowseFellow library.
+        - Tool-call trace visible: search_library(query="…") → results.
+        - Optional: BrowseFellow Library tab peeking on the right so it's
+          obvious where the citations come from.
+      Save as frontend/public/mcp-demo.png (or .jpg), then replace the
+      <div class="placeholder"> block below with:
+        <img src="/mcp-demo.png" alt="Claude Desktop answering a question by calling search_library on the user's BrowseFellow library" />
+    -->
+    <figure class="demo">
+      <div class="placeholder">
+        <div>Demo screenshot coming soon</div>
+        <small>Claude Desktop · search_library · your shelf</small>
+      </div>
+    </figure>
+    <p style="font-size: 13px; color: var(--ink-muted); margin-top: 4px; text-align: center; font-style: italic; font-family: 'Source Serif 4', Georgia, serif;">
+      Claude answering from your own reading, not the open web.
+    </p>
+
+    <h2>Ask it things like…</h2>
+    <ul class="prompts">
+      <li>“What have I read about attention spans?”</li>
+      <li>“Summarize the highlights I made this week.”</li>
+      <li>“Find the article where someone argued against remote work.”</li>
+      <li>“Based on what I've saved lately, what should I read next?”</li>
+      <li>“Pull quotes from my shelf about AI agents, with citations.”</li>
+    </ul>
+    <p style="font-size: 14px; color: var(--ink-muted); margin-top: 12px;">
+      The AI tool decides when to call <code>search_library</code>,
+      <code>get_article</code>, or <code>search_highlights</code>. You just ask
+      normal questions.
     </p>
 
     <h2>How it works</h2>
