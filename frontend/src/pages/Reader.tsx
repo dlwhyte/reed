@@ -21,7 +21,7 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { clsx } from "clsx";
-import { Article, Highlight, api } from "../lib/api";
+import { Article, Highlight, Me, api } from "../lib/api";
 import { toView } from "../lib/article";
 import { useStore } from "../store";
 import ChatPanel from "../components/ChatPanel";
@@ -46,6 +46,9 @@ export default function Reader() {
   const [panel, setPanel] = useState<Panel>("none");
   const [llmReady, setLlmReady] = useState(false);
   const [webReady, setWebReady] = useState(false);
+  const [me, setMe] = useState<Me | null>(null);
+  const chatAllowed = llmReady && !!me?.features.chat;
+  const researchAllowed = llmReady && !!me?.features.research;
   const [offline, setOffline] = useState(false);
   const [loadError, setLoadError] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
@@ -61,12 +64,13 @@ export default function Reader() {
     } catch {
       setLoadError(true);
     }
-    const [s, cfg, h, hl, tg] = await Promise.all([
+    const [s, cfg, h, hl, tg, m] = await Promise.all([
       api.similar(Number(id)).catch(() => [] as Article[]),
       api.config().catch(() => null),
       api.health().catch(() => null),
       api.articleHighlights(Number(id)).catch(() => [] as Highlight[]),
       api.tags().catch(() => [] as { tag: string; count: number }[]),
+      api.me().catch(() => null),
     ]);
     setSimilar(s);
     setOffline(!h?.ok);
@@ -74,6 +78,7 @@ export default function Reader() {
     setWebReady(!!cfg && (cfg as any).web_search_ready);
     setHighlights(hl);
     setTagPool(tg.map((t) => t.tag));
+    setMe(m);
   }
 
   async function saveTags(next: string[]) {
@@ -198,10 +203,10 @@ export default function Reader() {
           }
           return;
         case "c":
-          if (llmReady) setPanel((p) => (p === "chat" ? "none" : "chat"));
+          if (chatAllowed) setPanel((p) => (p === "chat" ? "none" : "chat"));
           return;
         case "r":
-          if (llmReady) setPanel((p) => (p === "research" ? "none" : "research"));
+          if (researchAllowed) setPanel((p) => (p === "research" ? "none" : "research"));
           return;
         case "g":
           gArmed = true;
@@ -222,7 +227,8 @@ export default function Reader() {
     article?.id,
     article?.is_favorite,
     article?.is_archived,
-    llmReady,
+    chatAllowed,
+    researchAllowed,
     shortcutsOpen,
   ]);
 
@@ -342,31 +348,31 @@ export default function Reader() {
               <Icon icon={ExternalLink} size={17} />
             </ToolbarButton>
             <ToolbarDivider />
-            {llmReady && (
-              <>
-                <ToolbarButton
-                  label="Chat with article"
-                  active={panel === "chat"}
-                  activeColor="plum"
-                  onClick={() =>
-                    setPanel((p) => (p === "chat" ? "none" : "chat"))
-                  }
-                >
-                  <Icon icon={MessageSquareText} size={17} />
-                </ToolbarButton>
-                <ToolbarButton
-                  label="Research this"
-                  active={panel === "research"}
-                  activeColor="olive"
-                  onClick={() =>
-                    setPanel((p) => (p === "research" ? "none" : "research"))
-                  }
-                >
-                  <Icon icon={FlaskConical} size={17} />
-                </ToolbarButton>
-                <ToolbarDivider />
-              </>
+            {chatAllowed && (
+              <ToolbarButton
+                label="Chat with article"
+                active={panel === "chat"}
+                activeColor="plum"
+                onClick={() =>
+                  setPanel((p) => (p === "chat" ? "none" : "chat"))
+                }
+              >
+                <Icon icon={MessageSquareText} size={17} />
+              </ToolbarButton>
             )}
+            {researchAllowed && (
+              <ToolbarButton
+                label="Research this"
+                active={panel === "research"}
+                activeColor="olive"
+                onClick={() =>
+                  setPanel((p) => (p === "research" ? "none" : "research"))
+                }
+              >
+                <Icon icon={FlaskConical} size={17} />
+              </ToolbarButton>
+            )}
+            {(chatAllowed || researchAllowed) && <ToolbarDivider />}
             <div className="hidden items-center gap-0.5 sm:flex">
               <ToolbarButton
                 label="Cycle theme"
@@ -706,7 +712,7 @@ export default function Reader() {
                     font: prefs.font === "serif" ? "sans" : "serif",
                   }),
               },
-              ...(llmReady
+              ...(chatAllowed
                 ? [
                     {
                       id: "chat",
@@ -716,6 +722,10 @@ export default function Reader() {
                       active: false,
                       onClick: () => setPanel("chat"),
                     },
+                  ]
+                : []),
+              ...(researchAllowed
+                ? [
                     {
                       id: "research",
                       icon: FlaskConical,

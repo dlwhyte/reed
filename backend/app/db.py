@@ -10,6 +10,7 @@ CREATE TABLE IF NOT EXISTS users (
     clerk_user_id TEXT UNIQUE NOT NULL,
     email TEXT,
     bookmarklet_token TEXT UNIQUE NOT NULL,
+    tier TEXT NOT NULL DEFAULT 'free',
     created_at TEXT DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -114,6 +115,20 @@ def _needs_wipe(conn: sqlite3.Connection) -> bool:
     return "user_id" not in cols
 
 
+def _table_columns(conn: sqlite3.Connection, table: str) -> set[str]:
+    return {row[1] for row in conn.execute(f"PRAGMA table_info({table})")}
+
+
+def _migrate(conn: sqlite3.Connection) -> None:
+    """Non-destructive column adds for tables that already exist with the
+    older shape. CREATE TABLE IF NOT EXISTS won't add a missing column."""
+    if "users" in {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}:
+        if "tier" not in _table_columns(conn, "users"):
+            conn.execute(
+                "ALTER TABLE users ADD COLUMN tier TEXT NOT NULL DEFAULT 'free'"
+            )
+
+
 def init_db():
     with connect() as conn:
         if _needs_wipe(conn):
@@ -126,6 +141,7 @@ def init_db():
                 """
             )
         conn.executescript(SCHEMA)
+        _migrate(conn)
 
 
 @contextmanager
