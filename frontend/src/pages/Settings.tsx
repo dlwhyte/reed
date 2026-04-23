@@ -63,14 +63,14 @@ export default function Settings() {
 
         <AccountRow />
 
-        <nav className="mt-6 flex gap-1.5 border-b border-dashed border-rule">
+        <nav className="mt-6 -mx-5 flex gap-1.5 overflow-x-auto scrollbar-none border-b border-dashed border-rule px-5 md:mx-0 md:flex-wrap md:px-0">
           {TABS.map((t) => (
             <button
               key={t.id}
               type="button"
               onClick={() => setTab(t.id)}
               className={clsx(
-                "-mb-px rounded-t-md border-b-2 px-3 py-2 font-sans text-[13px] font-medium transition-colors duration-150",
+                "-mb-px shrink-0 rounded-t-md border-b-2 px-3 py-2 font-sans text-[13px] font-medium transition-colors duration-150",
                 tab === t.id
                   ? "border-terracotta text-ink"
                   : "border-transparent text-ink-muted hover:text-ink",
