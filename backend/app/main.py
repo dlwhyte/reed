@@ -14,10 +14,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, HTMLResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from . import config, db, extractor, cohere_client, agent, tiers
+from . import api_tokens, config, db, extractor, cohere_client, agent, tiers
 from .auth import (
     current_user,
     current_user_or_bookmarklet,
+    current_user_via_api_token,
     regenerate_bookmarklet_token,
 )
 from .ratelimit import make_limiter
@@ -31,6 +32,12 @@ _chat_limit = make_limiter(20)
 _research_limit = make_limiter(10)
 _semantic_limit = make_limiter(30)
 _regen_limit = make_limiter(6)
+# Agent endpoints are hit by AI tools, which can burst requests — allow
+# higher rates than human-facing endpoints. Keyed by hashed API token
+# (see ratelimit.py) so each tool has its own bucket.
+_agent_search_limit = make_limiter(120)
+_agent_article_limit = make_limiter(240)
+_agent_highlights_limit = make_limiter(120)
 
 
 app = FastAPI(title="Reader")
@@ -162,6 +169,266 @@ def regenerate_token(
     _: None = Depends(_regen_limit),
 ):
     return {"bookmarklet_token": regenerate_bookmarklet_token(user["id"])}
+
+
+# --- Agent API (for AI tools via MCP / direct REST) -----------------------
+# These endpoints are deliberately narrow: only API-token auth (bft_...),
+# scoped to the token's user, returning compact JSON so the payload fits
+# cleanly in an LLM context window.
+
+
+def _article_to_agent_summary(row: db.sqlite3.Row, similarity: float | None = None) -> dict:
+    d = db.row_to_dict(row)
+    out = {
+        "id": d["id"],
+        "title": d.get("title") or "",
+        "url": d.get("url") or "",
+        "site_name": d.get("site_name") or None,
+        "excerpt": (d.get("excerpt") or "")[:400],
+        "summary": d.get("summary_short") or d.get("summary_long") or None,
+        "tags": d.get("tags") or [],
+        "created_at": d.get("created_at"),
+    }
+    if similarity is not None:
+        out["similarity"] = round(similarity, 3)
+    return out
+
+
+def _highlights_for_articles(user_id: int, article_ids: list[int]) -> dict[int, list[dict]]:
+    """Fetch highlights for a set of articles, grouped by article_id."""
+    if not article_ids:
+        return {}
+    placeholders = ",".join("?" * len(article_ids))
+    with db.connect() as conn:
+        rows = conn.execute(
+            f"""SELECT article_id, text, note
+                FROM highlights
+                WHERE user_id = ? AND article_id IN ({placeholders})
+                ORDER BY id ASC""",
+            (user_id, *article_ids),
+        ).fetchall()
+    grouped: dict[int, list[dict]] = {}
+    for r in rows:
+        grouped.setdefault(r["article_id"], []).append(
+            {"text": r["text"], "note": r["note"]}
+        )
+    return grouped
+
+
+@app.get("/api/agent/search")
+async def agent_search(
+    q: str,
+    limit: int = 10,
+    user: dict = Depends(current_user_via_api_token),
+    _rl: None = Depends(_agent_search_limit),
+):
+    """Semantic-if-available-else-keyword search over the user's library.
+    Returns each result with its highlights inline, so an AI tool only
+    needs one call to get the gist of a topic from the user's library."""
+    q = (q or "").strip()
+    if not q:
+        return {"query": q, "count": 0, "results": []}
+    limit = max(1, min(limit, 25))
+
+    # Try semantic first if LLM is available; fall back to FTS5 keyword
+    # search so the agent API works even without a Cohere key.
+    scored: list[tuple[float | None, db.sqlite3.Row]] = []
+    if config.LLM_READY:
+        try:
+            qvecs = await cohere_client.embed(
+                [q],
+                input_type="search_query",
+                endpoint="agent_search",
+                user_id=user["id"],
+            )
+            if qvecs and qvecs[0]:
+                qvec = qvecs[0]
+                with db.connect() as conn:
+                    rows = conn.execute(
+                        """SELECT id, url, title, author, site_name, excerpt,
+                            image_url, word_count, read_time_min, summary_short,
+                            summary_long, tags, is_archived, is_favorite,
+                            progress, created_at, read_at, embedding
+                           FROM articles
+                           WHERE user_id = ? AND embedding IS NOT NULL AND length(embedding) > 0""",
+                        (user["id"],),
+                    ).fetchall()
+                for r in rows:
+                    v = cohere_client.blob_to_embedding(r["embedding"])
+                    if v:
+                        scored.append((cohere_client.cosine(qvec, v), r))
+                scored.sort(key=lambda x: x[0] or 0, reverse=True)
+                scored = scored[:limit]
+        except Exception as e:
+            print(f"[agent_search] semantic fallback due to: {e}")
+            scored = []
+
+    if not scored:
+        # Keyword fallback via FTS5.
+        with db.connect() as conn:
+            try:
+                rows = conn.execute(
+                    """SELECT a.id, a.url, a.title, a.author, a.site_name, a.excerpt,
+                        a.image_url, a.word_count, a.read_time_min, a.summary_short,
+                        a.summary_long, a.tags, a.is_archived, a.is_favorite,
+                        a.progress, a.created_at, a.read_at
+                       FROM articles a JOIN articles_fts f ON f.rowid = a.id
+                       WHERE articles_fts MATCH ? AND a.user_id = ?
+                       ORDER BY rank LIMIT ?""",
+                    (q, user["id"], limit),
+                ).fetchall()
+            except Exception:
+                rows = conn.execute(
+                    """SELECT id, url, title, author, site_name, excerpt, image_url,
+                        word_count, read_time_min, summary_short, summary_long, tags,
+                        is_archived, is_favorite, progress, created_at, read_at
+                       FROM articles
+                       WHERE user_id = ? AND (title LIKE ? OR excerpt LIKE ?)
+                       ORDER BY created_at DESC LIMIT ?""",
+                    (user["id"], f"%{q}%", f"%{q}%", limit),
+                ).fetchall()
+        scored = [(None, r) for r in rows]
+
+    article_ids = [r["id"] for _, r in scored]
+    highlights_by_article = _highlights_for_articles(user["id"], article_ids)
+
+    results = []
+    for sim, r in scored:
+        summary = _article_to_agent_summary(r, sim)
+        summary["highlights"] = highlights_by_article.get(r["id"], [])
+        results.append(summary)
+
+    return {"query": q, "count": len(results), "results": results}
+
+
+@app.get("/api/agent/article/{article_id}")
+def agent_get_article(
+    article_id: int,
+    user: dict = Depends(current_user_via_api_token),
+    _rl: None = Depends(_agent_article_limit),
+):
+    """Full readable text + all highlights for one article. Content is
+    truncated to 8000 chars so a single article never blows out an LLM
+    context window — the caller can re-fetch with ?full=true if needed."""
+    with db.connect() as conn:
+        row = conn.execute(
+            "SELECT * FROM articles WHERE id = ? AND user_id = ?",
+            (article_id, user["id"]),
+        ).fetchone()
+    if not row:
+        raise HTTPException(404, "Not found")
+    d = db.row_to_full_dict(row)
+    content = d.get("content") or ""
+    MAX_LEN = 8000
+    truncated = len(content) > MAX_LEN
+    out = {
+        "id": d["id"],
+        "title": d.get("title") or "",
+        "url": d.get("url") or "",
+        "site_name": d.get("site_name") or None,
+        "author": d.get("author") or None,
+        "published": d.get("published") or None,
+        "excerpt": d.get("excerpt") or None,
+        "summary_short": d.get("summary_short") or None,
+        "summary_long": d.get("summary_long") or None,
+        "tags": d.get("tags") or [],
+        "word_count": d.get("word_count") or 0,
+        "read_time_min": d.get("read_time_min") or 0,
+        "created_at": d.get("created_at"),
+        "content": content[:MAX_LEN],
+        "content_truncated": truncated,
+        "highlights": _highlights_for_articles(user["id"], [d["id"]]).get(d["id"], []),
+    }
+    return out
+
+
+@app.get("/api/agent/highlights")
+def agent_search_highlights(
+    q: str | None = None,
+    limit: int = 20,
+    user: dict = Depends(current_user_via_api_token),
+    _rl: None = Depends(_agent_highlights_limit),
+):
+    """Return highlights (with article context) matching `q` — or the
+    most-recent N highlights if `q` is omitted. Highlights are often the
+    most useful agent context because they're the user's *own words*
+    selected passages, not generic article content."""
+    limit = max(1, min(limit, 50))
+    with db.connect() as conn:
+        if q and q.strip():
+            rows = conn.execute(
+                """SELECT h.id, h.text, h.note, h.created_at,
+                          a.id AS article_id, a.title AS article_title,
+                          a.url AS article_url, a.site_name AS article_site
+                   FROM highlights h JOIN articles a ON a.id = h.article_id
+                   WHERE h.user_id = ?
+                     AND (h.text LIKE ? OR h.note LIKE ?)
+                   ORDER BY h.id DESC LIMIT ?""",
+                (user["id"], f"%{q.strip()}%", f"%{q.strip()}%", limit),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                """SELECT h.id, h.text, h.note, h.created_at,
+                          a.id AS article_id, a.title AS article_title,
+                          a.url AS article_url, a.site_name AS article_site
+                   FROM highlights h JOIN articles a ON a.id = h.article_id
+                   WHERE h.user_id = ?
+                   ORDER BY h.id DESC LIMIT ?""",
+                (user["id"], limit),
+            ).fetchall()
+    return {
+        "query": q or "",
+        "count": len(rows),
+        "results": [
+            {
+                "id": r["id"],
+                "text": r["text"],
+                "note": r["note"],
+                "created_at": r["created_at"],
+                "article": {
+                    "id": r["article_id"],
+                    "title": r["article_title"],
+                    "url": r["article_url"],
+                    "site_name": r["article_site"],
+                },
+            }
+            for r in rows
+        ],
+    }
+
+
+# --- Token management endpoints (user manages their own AI-tool tokens) ---
+
+
+class ApiTokenCreateReq(BaseModel):
+    name: str
+
+
+@app.get("/api/me/api-tokens")
+def list_api_tokens(user: dict = Depends(current_user)):
+    return api_tokens.list_for_user(user["id"])
+
+
+@app.post("/api/me/api-tokens")
+def create_api_token(
+    req: ApiTokenCreateReq,
+    user: dict = Depends(current_user),
+    _: None = Depends(_regen_limit),
+):
+    name = (req.name or "").strip()[:60]
+    if not name:
+        raise HTTPException(400, "Token name is required")
+    raw, row = api_tokens.create(user["id"], name)
+    # Include the raw token ONCE — frontend is expected to show it
+    # immediately and never persist it beyond the copy-to-clipboard flow.
+    return {**row, "token": raw}
+
+
+@app.delete("/api/me/api-tokens/{token_id}")
+def revoke_api_token(token_id: int, user: dict = Depends(current_user)):
+    if not api_tokens.revoke(user["id"], token_id):
+        raise HTTPException(404, "Token not found or already revoked")
+    return {"ok": True}
 
 
 # --- Admin endpoints (tier='admin' only) ----------------------------------
