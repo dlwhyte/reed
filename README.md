@@ -43,6 +43,12 @@ Pocket shut down in July 2025. BrowseFellow is a local-first replacement: your d
 - iOS Shortcut for the Share Sheet (step-by-step guide in Settings)
 - **Import from Pocket** — drag a CSV export into Settings; BrowseFellow preserves tags and mirrors archived status
 
+**Use from other AI tools (MCP + agent API)**
+- Token-gated `/api/agent/*` REST endpoints expose `search_library`, `get_article`, `search_highlights` for external agents. OpenAPI spec: [`docs/openapi-agent.yaml`](docs/openapi-agent.yaml).
+- `@browsefellow/mcp` — an [MCP server](mcp-server/) that wraps those endpoints so Claude Desktop, Cursor, ChatGPT Connectors, and any other MCP-speaking client can search your library natively.
+- Per-client install snippets (Claude Desktop / Cursor / ChatGPT) and a token generator are on the in-app **Settings → MCP** panel and the public [`/mcp`](frontend/public/mcp.html) landing page.
+- Distribution docs: [`docs/NPM-PUBLISH.md`](docs/NPM-PUBLISH.md), [`docs/CUSTOM-GPT-SETUP.md`](docs/CUSTOM-GPT-SETUP.md), [`docs/CUSTOM-GPT-INSTRUCTIONS.md`](docs/CUSTOM-GPT-INSTRUCTIONS.md).
+
 **Ops**
 - Single URL (`http://localhost:8765`) — backend serves built frontend
 - `launchd` plist for always-on (auto-start on login, auto-restart on crash)
@@ -169,6 +175,8 @@ browsefellow/
 │   ├── requirements.txt
 │   └── run.sh
 ├── extension/                 # Chrome extension (popup + background)
+├── mcp-server/                # @browsefellow/mcp — MCP server wrapping the agent API
+├── docs/                      # distribution docs: MCP, Custom GPT, npm publish, openapi-agent.yaml
 ├── frontend/
 │   └── src/
 │       ├── App.tsx

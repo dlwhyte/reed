@@ -26,7 +26,9 @@ launchctl kickstart -k "gui/$UID/com.user.reader"
 cd backend && pytest
 ```
 
-18 tests, ~0.6s, no network, uses a temp SQLite via fixtures in `backend/tests/conftest.py`. Add new tests here before assuming a change works. CI (`.github/workflows/ci.yml`) runs the same suite plus `pip-audit`, `npm audit`, `gitleaks`, and CodeQL on every push.
+66 tests (split across `test_api.py`, `test_agent_api.py`, `test_security.py`, `test_tiers.py`), well under a second, no network, uses a temp SQLite via fixtures in `backend/tests/conftest.py`. Add new tests here before assuming a change works. CI (`.github/workflows/ci.yml`) runs the same suite plus `pip-audit`, `npm audit`, `gitleaks`, and CodeQL on every push.
+
+For the MCP server, tests live in `mcp-server/test/*.test.mjs` (Node built-in runner, no extra deps). Run with `cd mcp-server && npm test`.
 
 ## Where things live
 
@@ -38,6 +40,9 @@ cd backend && pytest
 - `frontend/src/pages/` — Library, Reader, Settings, Tags, Highlights.
 - `frontend/src/lib/api.ts` — typed fetch client for every endpoint.
 - `extension/` — Chrome extension (Manifest V3). Points at `http://localhost:8765`. **Don't rewrite this URL here** — use `scripts/build-friend-extension.sh <url>` to produce a URL-rebranded zip under `dist/extensions/`.
+- `mcp-server/` — `@browsefellow/mcp`, the MCP server wrapping the token-gated `/api/agent/*` endpoints. Three tools: `search_library`, `get_article`, `search_highlights`. Used by Claude Desktop, Cursor, ChatGPT Connectors, and this repo's own Claude Code session.
+- `docs/` — distribution docs: `openapi-agent.yaml` (agent API schema), `NPM-PUBLISH.md`, `CUSTOM-GPT-SETUP.md`, `CUSTOM-GPT-INSTRUCTIONS.md`, `CWS-LISTING.md`, `PRIVACY.md`.
+- `frontend/public/mcp.html` + `Settings.tsx` MCP panel — the in-app `/mcp` landing page and per-client install snippets (Claude Desktop / Cursor / ChatGPT).
 - `scripts/` — `install-launchd.sh`, `uninstall-launchd.sh`, `build-friend-extension.sh`. All paths are derived from `$SCRIPT_DIR` — don't hardcode absolute paths.
 
 ## Conventions / house rules
