@@ -32,6 +32,7 @@ import { ReadingProgress } from "../components/reader/ReadingProgress";
 import { ShortcutsHelp } from "../components/reader/ShortcutsHelp";
 import { TagEditor } from "../components/reader/TagEditor";
 import { Icon } from "../components/primitives/Icon";
+import { Tooltip } from "../components/primitives/Tooltip";
 import { useReadingProgress } from "../lib/useReadingProgress";
 
 type Panel = "none" | "chat" | "research";
@@ -827,29 +828,31 @@ function ToolbarButton({
 
   if (href) {
     return (
-      <a
-        href={href}
-        target="_blank"
-        rel="noreferrer"
-        title={label}
-        aria-label={label}
-        className={className}
-      >
-        {children}
-      </a>
+      <Tooltip label={label}>
+        <a
+          href={href}
+          target="_blank"
+          rel="noreferrer"
+          aria-label={label}
+          className={className}
+        >
+          {children}
+        </a>
+      </Tooltip>
     );
   }
 
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      title={label}
-      aria-label={label}
-      className={className}
-    >
-      {children}
-    </button>
+    <Tooltip label={label}>
+      <button
+        type="button"
+        onClick={onClick}
+        aria-label={label}
+        className={className}
+      >
+        {children}
+      </button>
+    </Tooltip>
   );
 }
 
