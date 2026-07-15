@@ -12,7 +12,7 @@ _config.set("DEFAULT", "EXTRACTION_TIMEOUT", "20")
 # Cap the number of redirects and body size we'll follow/read. A redirect loop
 # or 100MB page would otherwise stall the event loop and eat memory.
 _MAX_REDIRECTS = 5
-_MAX_BYTES = 5 * 1024 * 1024  # 5 MiB
+_MAX_BYTES = 10 * 1024 * 1024  # 10 MiB
 
 
 async def fetch_html(url: str) -> str:
@@ -35,7 +35,7 @@ async def fetch_html(url: str) -> str:
             async for chunk in r.aiter_bytes():
                 total += len(chunk)
                 if total > _MAX_BYTES:
-                    raise httpx.HTTPError("response exceeded 5 MiB cap")
+                    raise httpx.HTTPError("response exceeded 10 MiB cap")
                 chunks.append(chunk)
             body = b"".join(chunks)
             encoding = r.charset_encoding or "utf-8"
