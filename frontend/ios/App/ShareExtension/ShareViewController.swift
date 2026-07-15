@@ -134,7 +134,11 @@ class ShareViewController: UIViewController {
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try? JSONSerialization.data(withJSONObject: ["url": url.absoluteString])
-        request.timeoutInterval = 20
+        // The backend's save path can itself take up to ~20s fetching the
+        // source page, plus Cohere summarize/embed calls on top — give it
+        // real headroom so we don't show a false timeout for a save that's
+        // actually still completing server-side.
+        request.timeoutInterval = 45
 
         URLSession.shared.dataTask(with: request) { [weak self] _, response, error in
             DispatchQueue.main.async {
