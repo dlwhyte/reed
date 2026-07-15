@@ -493,7 +493,9 @@ async def _save_article(user_id: int, url: str) -> dict:
 
     try:
         html = await extractor.fetch_html(url)
-        article = extractor.extract(html, url)
+        # trafilatura parsing is CPU-bound; run it off the event loop so one
+        # save doesn't stall every other in-flight request.
+        article = await asyncio.to_thread(extractor.extract, html, url)
     except Exception as e:
         raise HTTPException(400, f"Could not fetch article: {e}")
 
