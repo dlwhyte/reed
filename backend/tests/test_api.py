@@ -65,6 +65,35 @@ def test_save_fetch_list_and_patch(client, fake_article):
     assert client.get(f"/api/articles/{aid}").status_code == 404
 
 
+def test_save_generates_llm_fields_in_background(client, fake_article, monkeypatch):
+    from app import main
+
+    monkeypatch.setattr(main.config, "LLM_READY", True)
+
+    async def _fake_summarize(title, content, user_id=None):
+        return {"summary_short": "short summary", "summary_long": "long summary", "tags": ["news"]}
+
+    async def _fake_embed(texts, endpoint=None, user_id=None):
+        return [[0.1, 0.2, 0.3]]
+
+    monkeypatch.setattr(main.cohere_client, "summarize_and_tag", _fake_summarize)
+    monkeypatch.setattr(main.cohere_client, "embed", _fake_embed)
+
+    r = client.post("/api/save", json={"url": "https://example.com/llm-post"})
+    assert r.status_code == 200, r.text
+    saved = r.json()
+    assert saved["duplicate"] is False
+    # The save response itself stays fast/unchanged — no LLM fields in it.
+    assert set(saved.keys()) == {"id", "duplicate", "title"}
+
+    # TestClient runs BackgroundTasks synchronously after the response, so by
+    # the time we fetch the article back, the follow-up UPDATE has landed.
+    art = client.get(f"/api/articles/{saved['id']}").json()
+    assert art["summary_short"] == "short summary"
+    assert art["summary_long"] == "long summary"
+    assert art["tags"] == ["news"]
+
+
 def test_save_dedupes_same_url(client, fake_article):
     u = "https://example.com/post-dedup"
     a = client.post("/api/save", json={"url": u}).json()

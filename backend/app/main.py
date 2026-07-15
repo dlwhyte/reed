@@ -9,7 +9,7 @@ import socket
 from pathlib import Path
 from urllib.parse import urlparse
 from pydantic import BaseModel
-from fastapi import Depends, FastAPI, HTTPException, Query, Request
+from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, HTMLResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -477,9 +477,51 @@ def admin_update_user(
     return {"ok": True, "id": user_id, "tier": req.tier}
 
 
-async def _save_article(user_id: int, url: str) -> dict:
+async def _generate_llm_fields(article_id: int, user_id: int, title: str, content: str) -> None:
+    """Best-effort post-save enrichment. Runs after the save response has
+    already gone out, so a slow/failed Cohere call never blocks the caller."""
+    if not config.LLM_READY:
+        return
+
+    summary_short = ""
+    summary_long = ""
+    tags: list[str] = []
+    embedding_blob = b""
+
+    try:
+        llm_data = await cohere_client.summarize_and_tag(title, content, user_id=user_id)
+        summary_short = llm_data["summary_short"]
+        summary_long = llm_data["summary_long"]
+        tags = llm_data["tags"]
+    except Exception as e:
+        print(f"[llm] summary failed: {e}")
+
+    try:
+        vecs = await cohere_client.embed(
+            [title + "\n\n" + content[:4000]], endpoint="save_embed", user_id=user_id
+        )
+        if vecs and vecs[0]:
+            embedding_blob = cohere_client.embedding_to_blob(vecs[0])
+    except Exception as e:
+        print(f"[llm] embed failed: {e}")
+
+    if not (summary_short or summary_long or tags or embedding_blob):
+        return
+
+    with db.connect() as conn:
+        conn.execute(
+            """UPDATE articles SET summary_short = ?, summary_long = ?, tags = ?, embedding = ?
+            WHERE id = ? AND user_id = ?""",
+            (summary_short, summary_long, json.dumps(tags), embedding_blob, article_id, user_id),
+        )
+
+
+async def _save_article(user_id: int, url: str, background_tasks: BackgroundTasks) -> dict:
     """Shared save path. Returns {id, duplicate, title}. Raises HTTPException
-    on fetch/extract failure."""
+    on fetch/extract failure. LLM summary/tags/embedding are generated in the
+    background after the row is inserted, so a slow Cohere call never delays
+    the response (or a client's own timeout) for what is otherwise a fast
+    fetch + parse + insert."""
     url = url.strip()
     _validate_save_url(url)
 
@@ -502,33 +544,6 @@ async def _save_article(user_id: int, url: str) -> dict:
     if not article["content"] or len(article["content"]) < 100:
         raise HTTPException(400, "Could not extract readable content from URL")
 
-    summary_short = ""
-    summary_long = ""
-    tags: list[str] = []
-    embedding_blob = b""
-
-    if config.LLM_READY:
-        try:
-            llm_data = await cohere_client.summarize_and_tag(
-                article["title"], article["content"], user_id=user_id
-            )
-            summary_short = llm_data["summary_short"]
-            summary_long = llm_data["summary_long"]
-            tags = llm_data["tags"]
-        except Exception as e:
-            print(f"[llm] summary failed: {e}")
-
-        try:
-            vecs = await cohere_client.embed(
-                [article["title"] + "\n\n" + article["content"][:4000]],
-                endpoint="save_embed",
-                user_id=user_id,
-            )
-            if vecs and vecs[0]:
-                embedding_blob = cohere_client.embedding_to_blob(vecs[0])
-        except Exception as e:
-            print(f"[llm] embed failed: {e}")
-
     with db.connect() as conn:
         cur = conn.execute(
             """INSERT INTO articles
@@ -540,15 +555,21 @@ async def _save_article(user_id: int, url: str) -> dict:
                 user_id, url, article["title"], article["author"], article["site_name"],
                 article["published"], article["content"], article["excerpt"],
                 article["image_url"], article["word_count"], article["read_time_min"],
-                summary_short, summary_long, json.dumps(tags), embedding_blob,
+                "", "", json.dumps([]), b"",
             ),
         )
-        return {"id": cur.lastrowid, "duplicate": False, "title": article["title"]}
+        article_id = cur.lastrowid
+
+    background_tasks.add_task(
+        _generate_llm_fields, article_id, user_id, article["title"], article["content"]
+    )
+    return {"id": article_id, "duplicate": False, "title": article["title"]}
 
 
 @app.post("/api/save")
 async def save(
     req: SaveReq,
+    background_tasks: BackgroundTasks,
     user: dict = Depends(current_user_or_bookmarklet),
     _rl: None = Depends(_save_limit),
 ):
@@ -556,11 +577,12 @@ async def save(
     # (extension / bookmarklet). Save cap (200/mo on free, unlimited on
     # plus/admin) enforced inline so we don't re-trigger auth.
     tiers.check_save_cap(user)
-    return await _save_article(user["id"], req.url)
+    return await _save_article(user["id"], req.url, background_tasks)
 
 
 @app.get("/share", response_class=HTMLResponse)
 async def share_target(
+    background_tasks: BackgroundTasks,
     user: dict = Depends(current_user_or_bookmarklet),
     url: str | None = None,
     text: str | None = None,
@@ -592,24 +614,25 @@ async def share_target(
         )
     if len(candidate) > MAX_URL_LENGTH:
         raise HTTPException(400, "URL is too long")
-    return await _save_via_get_impl(user["id"], candidate)
+    return await _save_via_get_impl(user["id"], candidate, background_tasks)
 
 
 @app.get("/save", response_class=HTMLResponse)
 async def save_via_get(
     url: str,
+    background_tasks: BackgroundTasks,
     user: dict = Depends(current_user_or_bookmarklet),
     _rl: None = Depends(_share_limit),
 ):
     """GET save endpoint for the bookmarklet (works from HTTPS pages via popup).
     Auth via Clerk bearer OR ?token=<bookmarklet_token>."""
     tiers.check_save_cap(user)
-    return await _save_via_get_impl(user["id"], url)
+    return await _save_via_get_impl(user["id"], url, background_tasks)
 
 
-async def _save_via_get_impl(user_id: int, url: str) -> HTMLResponse:
+async def _save_via_get_impl(user_id: int, url: str, background_tasks: BackgroundTasks) -> HTMLResponse:
     try:
-        result = await _save_article(user_id, url)
+        result = await _save_article(user_id, url, background_tasks)
         title = result.get("title") or url
         status = "Already saved" if result.get("duplicate") else "Saved"
         color = "#888" if result.get("duplicate") else "#0a7a2a"
