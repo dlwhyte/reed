@@ -7,16 +7,17 @@ private let backendBase = "https://browsefellow.com"
 class ShareViewController: UIViewController {
     private let statusLabel = UILabel()
     private let spinner = UIActivityIndicatorView(style: .medium)
+    private let dismissButton = UIButton(type: .system)
 
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = .systemBackground
         setupUI()
+        setStatus("Looking for a link…")
         handleShare()
     }
 
     private func setupUI() {
-        statusLabel.text = "Saving to BrowseFellow…"
         statusLabel.textAlignment = .center
         statusLabel.numberOfLines = 0
         statusLabel.font = .preferredFont(forTextStyle: .body)
@@ -24,18 +25,34 @@ class ShareViewController: UIViewController {
         spinner.translatesAutoresizingMaskIntoConstraints = false
         spinner.startAnimating()
 
+        dismissButton.setTitle("Dismiss", for: .normal)
+        dismissButton.translatesAutoresizingMaskIntoConstraints = false
+        dismissButton.isHidden = true
+        dismissButton.addTarget(self, action: #selector(dismissTapped), for: .touchUpInside)
+
         view.addSubview(statusLabel)
         view.addSubview(spinner)
+        view.addSubview(dismissButton)
 
         NSLayoutConstraint.activate([
             spinner.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            spinner.centerYAnchor.constraint(equalTo: view.centerYAnchor, constant: -20),
+            spinner.centerYAnchor.constraint(equalTo: view.centerYAnchor, constant: -30),
             statusLabel.topAnchor.constraint(equalTo: spinner.bottomAnchor, constant: 16),
             statusLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 24),
             statusLabel.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -24),
+            dismissButton.topAnchor.constraint(equalTo: statusLabel.bottomAnchor, constant: 20),
+            dismissButton.centerXAnchor.constraint(equalTo: view.centerXAnchor),
         ])
 
-        preferredContentSize = CGSize(width: 320, height: 160)
+        preferredContentSize = CGSize(width: 320, height: 200)
+    }
+
+    @objc private func dismissTapped() {
+        extensionContext?.completeRequest(returningItems: nil, completionHandler: nil)
+    }
+
+    private func setStatus(_ text: String) {
+        statusLabel.text = text
     }
 
     private func handleShare() {
@@ -43,6 +60,7 @@ class ShareViewController: UIViewController {
             promptForToken()
             return
         }
+        setStatus("Reading shared link…")
         extractSharedURL { [weak self] url in
             guard let self else { return }
             guard let url else {
@@ -140,6 +158,7 @@ class ShareViewController: UIViewController {
         // actually still completing server-side.
         request.timeoutInterval = 45
 
+        setStatus("Connecting to BrowseFellow…")
         URLSession.shared.dataTask(with: request) { [weak self] _, response, error in
             DispatchQueue.main.async {
                 guard let self else { return }
@@ -171,9 +190,18 @@ class ShareViewController: UIViewController {
             statusLabel.text = message
         }
         spinner.stopAnimating()
-        let delay = message == nil ? 0.0 : (success ? 0.8 : 1.6)
-        DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
-            self?.extensionContext?.completeRequest(returningItems: nil, completionHandler: nil)
+
+        // On success, auto-dismiss quickly. On failure, leave the message on
+        // screen with a Dismiss button so it can actually be read (and
+        // reported) instead of vanishing after a fixed delay.
+        if success {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in
+                self?.extensionContext?.completeRequest(returningItems: nil, completionHandler: nil)
+            }
+        } else if message == nil {
+            extensionContext?.completeRequest(returningItems: nil, completionHandler: nil)
+        } else {
+            dismissButton.isHidden = false
         }
     }
 }
