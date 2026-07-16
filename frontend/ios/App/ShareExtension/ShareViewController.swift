@@ -4,6 +4,25 @@ private let appGroupID = "group.com.dlwhyte.reed"
 private let tokenDefaultsKey = "bookmarklet_token"
 private let backendBase = "https://browsefellow.com"
 
+/// Temporary diagnostic trace — appends timestamped lines to a file in the
+/// shared App Group container so failures can be inspected after the fact,
+/// regardless of what UI (if any) iOS actually shows for this extension.
+private func debugLog(_ message: String) {
+    guard let container = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroupID) else {
+        return
+    }
+    let logURL = container.appendingPathComponent("share_debug.log")
+    let line = "\(Date()) \(message)\n"
+    guard let data = line.data(using: .utf8) else { return }
+    if let handle = try? FileHandle(forWritingTo: logURL) {
+        handle.seekToEndOfFile()
+        handle.write(data)
+        handle.closeFile()
+    } else {
+        try? data.write(to: logURL)
+    }
+}
+
 class ShareViewController: UIViewController {
     private let statusLabel = UILabel()
     private let spinner = UIActivityIndicatorView(style: .medium)
@@ -11,6 +30,7 @@ class ShareViewController: UIViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
+        debugLog("viewDidLoad")
         view.backgroundColor = .systemBackground
         setupUI()
         setStatus("Looking for a link…")
@@ -57,16 +77,20 @@ class ShareViewController: UIViewController {
 
     private func handleShare() {
         guard let token = storedToken(), !token.isEmpty else {
+            debugLog("no stored token, prompting")
             promptForToken()
             return
         }
+        debugLog("token found (len=\(token.count)), extracting shared URL")
         setStatus("Reading shared link…")
         extractSharedURL { [weak self] url in
             guard let self else { return }
             guard let url else {
+                debugLog("extractSharedURL: no URL found")
                 self.finish(message: "No link found to save.", success: false)
                 return
             }
+            debugLog("extractSharedURL: got \(url.absoluteString)")
             self.save(url: url, token: token)
         }
     }
@@ -159,7 +183,9 @@ class ShareViewController: UIViewController {
         request.timeoutInterval = 45
 
         setStatus("Connecting to BrowseFellow…")
-        URLSession.shared.dataTask(with: request) { [weak self] _, response, error in
+        debugLog("starting request to \(endpoint.absoluteString)")
+        let task = URLSession.shared.dataTask(with: request) { [weak self] _, response, error in
+            debugLog("dataTask completion fired. error=\(String(describing: error)) response=\(String(describing: response))")
             DispatchQueue.main.async {
                 guard let self else { return }
                 if let error {
@@ -182,10 +208,18 @@ class ShareViewController: UIViewController {
                 }
                 self.finish(message: "Saved to BrowseFellow", success: true)
             }
-        }.resume()
+        }
+        debugLog("calling task.resume()")
+        task.resume()
+        debugLog("task.resume() returned, state=\(task.state.rawValue)")
+    }
+
+    deinit {
+        debugLog("ShareViewController deinit")
     }
 
     private func finish(message: String?, success: Bool) {
+        debugLog("finish: message=\(message ?? "nil") success=\(success)")
         if let message {
             statusLabel.text = message
         }
