@@ -6,6 +6,7 @@ import Reader from "./pages/Reader";
 import Settings from "./pages/Settings";
 import Tags from "./pages/Tags";
 import Highlights from "./pages/Highlights";
+import Notes from "./pages/Notes";
 import Admin from "./pages/Admin";
 import { CommandPalette } from "./components/CommandPalette";
 import { useStore } from "./store";
@@ -55,6 +56,7 @@ export default function App() {
         <Route path="/settings" element={<Settings />} />
         <Route path="/tags" element={<Tags />} />
         <Route path="/highlights" element={<Highlights />} />
+        <Route path="/notes" element={<Notes />} />
         <Route path="/admin" element={<Admin />} />
       </Routes>
       {paletteOpen && <CommandPalette onClose={() => setPaletteOpen(false)} />}
