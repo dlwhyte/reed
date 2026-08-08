@@ -8,10 +8,18 @@ private let backendBase = "https://browsefellow.com"
 /// shared App Group container so failures can be inspected after the fact,
 /// regardless of what UI (if any) iOS actually shows for this extension.
 private func debugLog(_ message: String) {
+    NSLog("[ShareExtension] \(message)")
     guard let container = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroupID) else {
+        NSLog("[ShareExtension] debugLog: no container URL for \(appGroupID)")
         return
     }
-    let logURL = container.appendingPathComponent("share_debug.log")
+    let cachesDir = container.appendingPathComponent("Library/Caches", isDirectory: true)
+    do {
+        try FileManager.default.createDirectory(at: cachesDir, withIntermediateDirectories: true)
+    } catch {
+        NSLog("[ShareExtension] debugLog: couldn't create Caches dir: \(error)")
+    }
+    let logURL = cachesDir.appendingPathComponent("share_debug.log")
     let line = "\(Date()) \(message)\n"
     guard let data = line.data(using: .utf8) else { return }
     if let handle = try? FileHandle(forWritingTo: logURL) {
@@ -19,7 +27,11 @@ private func debugLog(_ message: String) {
         handle.write(data)
         handle.closeFile()
     } else {
-        try? data.write(to: logURL)
+        do {
+            try data.write(to: logURL)
+        } catch {
+            NSLog("[ShareExtension] debugLog: write failed: \(error)")
+        }
     }
 }
 
