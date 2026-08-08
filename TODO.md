@@ -4,30 +4,18 @@ Running list of known work that's been deferred with context.
 
 ## Security / deps
 
-### Bump Capacitor v6 → v8
-- **Why**: `@capacitor/cli` v6 pulls a vulnerable `tar` transitively (2 high-severity CVEs). Surfaced by `npm audit`. CI gate is currently set to `critical` to skip this so the pipeline stays green.
-- **Risk profile**: build-time only — tar runs during `cap sync` / `cap add`, not at iOS runtime. Low real-world attack surface for a personal project.
-- **Scope**: crosses two major versions (6 → 7 → 8). Expect iOS minimum-version bumps, plugin API changes, Node.js version floor moving.
-- **How to do it safely**: branch, `npm install @capacitor/cli@8 @capacitor/core@8 @capacitor/ios@8`, `npx cap sync ios`, rebuild via Xcode, smoke test the iOS app (save + open + highlight), then flip CI `--audit-level=critical` → `--audit-level=high`.
-- **When**: next time I'm actively touching the iOS build.
-
 ### Move `@capacitor/cli` to `devDependencies`
 - It's a build tool, not runtime. Currently in `dependencies`, which is why `npm audit --omit=dev` still flags it. 1-line fix, safe.
 
 ### FastAPI `on_event` → lifespan
 - Deprecation warnings in test output. Not breaking yet but will be in a future FastAPI major. Swap `@app.on_event("startup")` for the `lifespan` async context manager pattern.
 
+### Capacitor v6 → v8 (optional, no longer urgent)
+- **Why it used to be here**: `@capacitor/cli` v6 pulls a vulnerable `tar` transitively. That critical CVE is now fixed (2026-08-08) via `"overrides": {"tar": "^7.5.21"}` in `frontend/package.json` — no major version bump needed.
+- **Still true if ever revisited**: a real v6→v8 bump crosses two majors, needs Node ≥22 (CI currently on Node 20), and would touch the iOS build (minimum-version bumps, plugin API changes).
+- **When**: only if some other reason to touch Capacitor comes up. Not driven by security anymore.
+
 ## Product / features
-
-### Real HTTPS on `browsefellow.com`
-- Currently `http://browsefellow.com:8765` works (A record → Tailscale IP → backend). No TLS on the custom domain.
-- Tailscale's built-in HTTPS works on `*.ts.net` only. For HTTPS on the custom domain behind Tailscale, run **Caddy** on the Mac, listen on `100.111.63.128:443`, use Let's Encrypt DNS-01 challenge (no public port needed), proxy to `localhost:8765`.
-- Gets us `https://browsefellow.com` with a valid cert, accessible to any tailnet client.
-
-### Auth layer (only if going public)
-- The backend trusts any request that reaches it. Fine behind Tailscale. **Not fine** on a public VPS or Cloudflare Tunnel.
-- Simplest: single shared token in an HTTP header, validated via FastAPI dependency. Token set in `.env`, sent from frontend/extension via configurable setting.
-- Only do this when / if hosting moves beyond Tailscale.
 
 ### Configurable backend URL in the Chrome extension (option 3)
 - `scripts/build-friend-extension.sh` currently bakes the URL in per build. If a friend wants to switch between their own backend and mine, they need a new zip.
@@ -36,7 +24,13 @@ Running list of known work that's been deferred with context.
 
 ## Ops / hosting
 
-### Pi or VPS migration
-- Mac-hosted is working for now. Revisit when: uptime becomes a problem, I want to open it publicly (beyond tailnet), or I want the Mac for something else.
-- Candidates: Raspberry Pi 4 (8GB) or Hetzner CX22 (~$5/mo).
-- Would also pull in the HTTPS + auth items above.
+### DB backup retention / offsite copy
+- Nightly local backup shipped 2026-08-08: `browsefellow-backup.timer` runs `sqlite3 .backup` at 03:30 UTC, writes to `/srv/browsefellow/backups/`, keeps the last 14 days.
+- Protects against corruption / accidental deletion. Does **not** protect against total server/disk loss — everything's on the same box.
+- If that risk matters more later (DB grows past trivial size, or this stops being a toy): add an offsite leg — rsync down to the Mac, or rclone to Hetzner Object Storage (needs a bucket + access keys first).
+
+## Done (kept for history)
+
+- **Pi or VPS migration** — live on Hetzner CPX11 (`5.161.238.66`) since 2026-07-15.
+- **Real HTTPS on `browsefellow.com`** — nginx + certbot on the Hetzner box, verified serving valid TLS. (The old plan here was Mac+Tailscale+Caddy; superseded by the VPS move.)
+- **Auth layer** — Clerk multi-user auth shipped (branch `auth/multi-user`, merged).
