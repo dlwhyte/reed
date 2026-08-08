@@ -155,6 +155,62 @@ def test_usage_rollups_are_per_user(two_clients):
     assert bob_usage["output_tokens"] == 500
 
 
+def test_alice_cannot_see_bobs_notes(two_clients):
+    alice, bob = two_clients
+    bob.post("/api/notes", json={"title": "Bob's secret", "body": "shh"})
+
+    r = alice.get("/api/notes")
+    assert r.status_code == 200
+    assert r.json() == []
+    assert len(bob.get("/api/notes").json()) == 1
+
+
+def test_alice_cannot_read_update_or_delete_bobs_note(two_clients):
+    alice, bob = two_clients
+    note_id = bob.post("/api/notes", json={"body": "bob only"}).json()["id"]
+
+    assert alice.get(f"/api/notes/{note_id}").status_code == 404
+    assert alice.patch(f"/api/notes/{note_id}", json={"is_pinned": True}).status_code == 404
+    assert alice.delete(f"/api/notes/{note_id}").status_code == 404
+
+    # Untouched for Bob.
+    assert bob.get(f"/api/notes/{note_id}").status_code == 200
+
+
+def test_alice_cannot_see_or_use_bobs_labels(two_clients):
+    alice, bob = two_clients
+    bob_label = bob.post("/api/labels", json={"name": "Bob Only"}).json()
+
+    assert alice.get("/api/labels").json() == []
+
+    # Alice can't attach Bob's label to her own note — silently dropped,
+    # not an error, and never leaks whose label it was.
+    r = alice.post("/api/notes", json={"body": "mine", "label_ids": [bob_label["id"]]})
+    assert r.status_code == 200
+    assert r.json()["label_ids"] == []
+
+    # Nor can she delete or move it.
+    assert alice.delete(f"/api/labels/{bob_label['id']}").status_code == 404
+    assert alice.patch(f"/api/labels/{bob_label['id']}", json={"name": "Hijacked"}).status_code == 404
+    assert bob.get("/api/labels").json()[0]["name"] == "Bob Only"
+
+
+def test_alice_cannot_bulk_relabel_bobs_notes(two_clients):
+    alice, bob = two_clients
+    bob_note = bob.post("/api/notes", json={"body": "bob's"}).json()
+    alice_label = alice.post("/api/labels", json={"name": "Alice's label"}).json()
+
+    r = alice.post(
+        "/api/notes/bulk-relabel",
+        json={"note_ids": [bob_note["id"]], "add_label_ids": [alice_label["id"]]},
+    )
+    assert r.status_code == 200
+    assert r.json()["updated"] == 0
+
+    # Bob's note is untouched.
+    assert bob.get(f"/api/notes/{bob_note['id']}").json()["label_ids"] == []
+
+
 # --- A07 — Authentication required on protected endpoints --------------------
 
 
@@ -182,6 +238,19 @@ def test_protected_endpoints_require_auth(raw_client):
         ("DELETE", "/api/highlights/1"),
         ("GET", "/api/highlights"),
         ("GET", "/api/usage"),
+        ("GET", "/api/notes"),
+        ("POST", "/api/notes"),
+        ("GET", "/api/notes/1"),
+        ("PATCH", "/api/notes/1"),
+        ("DELETE", "/api/notes/1"),
+        ("POST", "/api/notes/bulk-relabel"),
+        ("GET", "/api/labels"),
+        ("POST", "/api/labels"),
+        ("PATCH", "/api/labels/1"),
+        ("DELETE", "/api/labels/1"),
+        ("GET", "/api/saved-views"),
+        ("POST", "/api/saved-views"),
+        ("DELETE", "/api/saved-views/1"),
     ]
 
     for method, path in public:

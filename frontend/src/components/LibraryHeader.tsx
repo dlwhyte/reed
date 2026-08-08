@@ -4,6 +4,7 @@ import {
   Highlighter,
   Search,
   Settings as SettingsIcon,
+  StickyNote,
 } from "lucide-react";
 import { clsx } from "clsx";
 import { Wordmark } from "./primitives/Wordmark";
@@ -43,6 +44,9 @@ export default function LibraryHeader({
               onClick={onFocusSearch}
             />
           )}
+          <Link to="/notes" aria-label="Notes" title="Notes">
+            <IconButton icon={StickyNote} label="Notes" />
+          </Link>
           <Link to="/tags" aria-label="All tags" title="All tags">
             <IconButton icon={Hash} label="All tags" />
           </Link>
