@@ -32,10 +32,11 @@ jobs:
       - run: npx tsc --noEmit
       - run: npm run build
       - name: npm audit (critical, prod deps only)
-        # Threshold is `critical` rather than `high` because @capacitor/cli
-        # v6 pulls a vulnerable `tar` transitively and the fix requires a
-        # two-major-version jump (v8.3+). That's a build-time-only risk,
-        # tracked as a follow-up. Revisit once @capacitor/* is bumped.
+        # Threshold is `critical` rather than `high` because react-router
+        # (transitive via react-router-dom) sits at moderate and the fix
+        # is a v6->v7 major bump, out of scope for a routine dependency pass.
+        # The prior critical `tar` advisory (via @capacitor/cli) is now
+        # pinned to a patched version via package.json "overrides".
         run: npm audit --omit=dev --audit-level=critical
 
   backend:
