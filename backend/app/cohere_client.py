@@ -109,23 +109,73 @@ Respond with JSON only, no prose."""
         return {"summary_short": "", "summary_long": "", "tags": []}
 
 
+async def complete(
+    prompt: str,
+    system: str | None = None,
+    json_mode: bool = False,
+    endpoint: str = "complete",
+    model: str | None = None,
+    user_id: int | None = None,
+) -> str:
+    """One-shot completion, returned as text.
+
+    The single place Discover talks to a model. Swapping in another provider
+    (Anthropic, OpenAI, a local endpoint) means reimplementing this signature
+    and nothing else.
+    """
+    if not config.LLM_READY:
+        raise RuntimeError("LLM is disabled; set COHERE_API_KEY and ENABLE_LLM=true")
+
+    use_model = model or config.COHERE_CHAT_MODEL
+    messages = []
+    if system:
+        messages.append({"role": "system", "content": system})
+    messages.append({"role": "user", "content": prompt})
+
+    kwargs = {"model": use_model, "messages": messages}
+    if json_mode:
+        kwargs["response_format"] = {"type": "json_object"}
+
+    resp = await client().chat(**kwargs)
+    inp, out = _extract_tokens(resp)
+    record_usage(endpoint, use_model, inp, out, user_id=user_id)
+    return resp.message.content[0].text
+
+
+# Cohere rejects an embed call carrying more than this many texts. Saving one
+# article never approached it; bulk callers (Discover clustering) do.
+MAX_EMBED_BATCH = 96
+
+
 async def embed(
     texts: list[str],
     input_type: str = "search_document",
     endpoint: str = "embed",
     user_id: int | None = None,
 ) -> list[list[float]]:
-    if not config.LLM_READY or not texts:
+    """Embed any number of texts, in input order.
+
+    Splits into API-sized batches; usage is recorded per batch so the
+    Settings counter stays accurate.
+    """
+    # Embeddings are Cohere-only; LLM_READY may be true via another provider.
+    if not config.EMBEDDINGS_READY or not texts:
         return [[] for _ in texts]
-    resp = await client().embed(
-        model=config.COHERE_EMBED_MODEL,
-        texts=[_truncate(t, 8000) for t in texts],
-        input_type=input_type,
-        embedding_types=["float"],
-    )
-    inp, out = _extract_tokens(resp)
-    record_usage(endpoint, config.COHERE_EMBED_MODEL, inp, out, user_id=user_id)
-    return resp.embeddings.float_
+
+    out_vectors: list[list[float]] = []
+    for start in range(0, len(texts), MAX_EMBED_BATCH):
+        chunk = texts[start:start + MAX_EMBED_BATCH]
+        resp = await client().embed(
+            model=config.COHERE_EMBED_MODEL,
+            texts=[_truncate(t, 8000) for t in chunk],
+            input_type=input_type,
+            embedding_types=["float"],
+        )
+        inp, out = _extract_tokens(resp)
+        record_usage(endpoint, config.COHERE_EMBED_MODEL, inp, out, user_id=user_id)
+        out_vectors.extend(resp.embeddings.float_)
+
+    return out_vectors
 
 
 async def chat_with_article_stream(

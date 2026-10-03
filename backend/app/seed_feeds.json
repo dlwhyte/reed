@@ -1,0 +1,398 @@
+[
+ {
+  "topic": "agentic",
+  "url": "https://www.answer.ai/index.xml",
+  "title": "Answer.AI",
+  "weight": 1
+ },
+ {
+  "topic": "agentic",
+  "url": "https://aws.amazon.com/blogs/machine-learning/feed/",
+  "title": "AWS ML Blog",
+  "weight": 1
+ },
+ {
+  "topic": "agentic",
+  "url": "https://blog.google/technology/google-deepmind/rss/",
+  "title": "DeepMind on Google Blog",
+  "weight": 1
+ },
+ {
+  "topic": "agentic",
+  "url": "https://eugeneyan.com/rss/",
+  "title": "Eugene Yan",
+  "weight": 1
+ },
+ {
+  "topic": "agentic",
+  "url": "https://github.blog/ai-and-ml/feed/",
+  "title": "GitHub AI & ML",
+  "weight": 1
+ },
+ {
+  "topic": "agentic",
+  "url": "https://blog.google/products/gemini/rss/",
+  "title": "Google Gemini",
+  "weight": 1
+ },
+ {
+  "topic": "agentic",
+  "url": "https://hamel.dev/index.xml",
+  "title": "Hamel Husain",
+  "weight": 1
+ },
+ {
+  "topic": "agentic",
+  "url": "https://jack-clark.net/feed/",
+  "title": "Jack Clark",
+  "weight": 1
+ },
+ {
+  "topic": "agentic",
+  "url": "https://www.oneusefulthing.org/feed",
+  "title": "One Useful Thing",
+  "weight": 1
+ },
+ {
+  "topic": "agentic",
+  "url": "https://newsletter.pragmaticengineer.com/feed",
+  "title": "Pragmatic Engineer",
+  "weight": 1
+ },
+ {
+  "topic": "agentic",
+  "url": "https://thesequence.substack.com/feed",
+  "title": "The Sequence",
+  "weight": 1
+ },
+ {
+  "topic": "aisec",
+  "url": "https://embracethered.com/blog/index.xml",
+  "title": "Embrace The Red",
+  "weight": 1.3
+ },
+ {
+  "topic": "aisec",
+  "url": "https://blog.mozilla.ai/rss/",
+  "title": "Mozilla.ai",
+  "weight": 1
+ },
+ {
+  "topic": "aisec",
+  "url": "https://www.nist.gov/news-events/news/rss.xml",
+  "title": "NIST News",
+  "weight": 1
+ },
+ {
+  "topic": "aisec",
+  "url": "https://blog.trailofbits.com/feed/",
+  "title": "Trail of Bits",
+  "weight": 1.3
+ },
+ {
+  "topic": "genai",
+  "url": "https://magazine.sebastianraschka.com/feed",
+  "title": "Ahead of AI",
+  "weight": 1.3
+ },
+ {
+  "topic": "genai",
+  "url": "https://arstechnica.com/ai/feed/",
+  "title": "Ars Technica AI",
+  "weight": 1
+ },
+ {
+  "topic": "genai",
+  "url": "https://bair.berkeley.edu/blog/feed.xml",
+  "title": "Berkeley AI Research",
+  "weight": 1.3
+ },
+ {
+  "topic": "genai",
+  "url": "https://thezvi.substack.com/feed",
+  "title": "Don't Worry About the Vase",
+  "weight": 1
+ },
+ {
+  "topic": "genai",
+  "url": "https://blog.google/technology/ai/rss/",
+  "title": "Google AI",
+  "weight": 1
+ },
+ {
+  "topic": "genai",
+  "url": "https://deepmind.google/blog/rss.xml",
+  "title": "Google DeepMind",
+  "weight": 1.3
+ },
+ {
+  "topic": "genai",
+  "url": "https://huggingface.co/blog/feed.xml",
+  "title": "Hugging Face",
+  "weight": 1.3
+ },
+ {
+  "topic": "genai",
+  "url": "https://importai.substack.com/feed",
+  "title": "Import AI",
+  "weight": 1.3
+ },
+ {
+  "topic": "genai",
+  "url": "https://www.interconnects.ai/feed",
+  "title": "Interconnects",
+  "weight": 1.3
+ },
+ {
+  "topic": "genai",
+  "url": "https://www.latent.space/feed",
+  "title": "Latent Space",
+  "weight": 1
+ },
+ {
+  "topic": "genai",
+  "url": "https://lilianweng.github.io/index.xml",
+  "title": "Lil'Log",
+  "weight": 1.3
+ },
+ {
+  "topic": "genai",
+  "url": "https://www.microsoft.com/en-us/research/feed/",
+  "title": "Microsoft Research",
+  "weight": 1.3
+ },
+ {
+  "topic": "genai",
+  "url": "https://news.mit.edu/rss/topic/artificial-intelligence2",
+  "title": "MIT News: AI",
+  "weight": 1
+ },
+ {
+  "topic": "genai",
+  "url": "https://www.technologyreview.com/feed/",
+  "title": "MIT Technology Review",
+  "weight": 0.8
+ },
+ {
+  "topic": "genai",
+  "url": "https://openai.com/blog/rss.xml",
+  "title": "OpenAI",
+  "weight": 1.3
+ },
+ {
+  "topic": "genai",
+  "url": "https://simonwillison.net/atom/everything/",
+  "title": "Simon Willison",
+  "weight": 1.3
+ },
+ {
+  "topic": "genai",
+  "url": "https://techcrunch.com/category/artificial-intelligence/feed/",
+  "title": "TechCrunch AI",
+  "weight": 0.8
+ },
+ {
+  "topic": "security",
+  "url": "https://www.bitdefender.com/blog/api/rss/labs/",
+  "title": "Bitdefender Labs",
+  "weight": 1
+ },
+ {
+  "topic": "security",
+  "url": "https://www.bleepingcomputer.com/feed/",
+  "title": "BleepingComputer",
+  "weight": 1
+ },
+ {
+  "topic": "security",
+  "url": "https://www.cisa.gov/cybersecurity-advisories/all.xml",
+  "title": "CISA Advisories",
+  "weight": 1.3
+ },
+ {
+  "topic": "security",
+  "url": "https://blog.talosintelligence.com/rss/",
+  "title": "Cisco Talos",
+  "weight": 1.3
+ },
+ {
+  "topic": "security",
+  "url": "https://blog.cloudflare.com/rss/",
+  "title": "Cloudflare",
+  "weight": 1
+ },
+ {
+  "topic": "security",
+  "url": "https://www.crowdstrike.com/blog/feed/",
+  "title": "CrowdStrike",
+  "weight": 1
+ },
+ {
+  "topic": "security",
+  "url": "https://www.darkreading.com/rss.xml",
+  "title": "Dark Reading",
+  "weight": 0.8
+ },
+ {
+  "topic": "security",
+  "url": "https://www.exploit-db.com/rss.xml",
+  "title": "Exploit-DB",
+  "weight": 0.8
+ },
+ {
+  "topic": "security",
+  "url": "https://security.googleblog.com/feeds/posts/default",
+  "title": "Google Security Blog",
+  "weight": 1
+ },
+ {
+  "topic": "security",
+  "url": "https://grahamcluley.com/feed/",
+  "title": "Graham Cluley",
+  "weight": 1
+ },
+ {
+  "topic": "security",
+  "url": "https://www.helpnetsecurity.com/feed/",
+  "title": "Help Net Security",
+  "weight": 0.8
+ },
+ {
+  "topic": "security",
+  "url": "https://www.infosecurity-magazine.com/rss/news/",
+  "title": "Infosecurity Magazine",
+  "weight": 0.8
+ },
+ {
+  "topic": "security",
+  "url": "https://krebsonsecurity.com/feed/",
+  "title": "Krebs on Security",
+  "weight": 1.3
+ },
+ {
+  "topic": "security",
+  "url": "https://www.microsoft.com/en-us/security/blog/feed/",
+  "title": "Microsoft Security",
+  "weight": 1
+ },
+ {
+  "topic": "security",
+  "url": "https://www.ncsc.gov.uk/api/1/services/v1/all-rss-feed.xml",
+  "title": "NCSC UK",
+  "weight": 1.3
+ },
+ {
+  "topic": "security",
+  "url": "https://portswigger.net/research/rss",
+  "title": "PortSwigger Research",
+  "weight": 1.3
+ },
+ {
+  "topic": "security",
+  "url": "https://googleprojectzero.blogspot.com/feeds/posts/default",
+  "title": "Project Zero",
+  "weight": 1.3
+ },
+ {
+  "topic": "security",
+  "url": "https://www.proofpoint.com/us/rss.xml",
+  "title": "Proofpoint",
+  "weight": 1
+ },
+ {
+  "topic": "security",
+  "url": "https://blog.qualys.com/feed",
+  "title": "Qualys",
+  "weight": 1
+ },
+ {
+  "topic": "security",
+  "url": "https://blog.rapid7.com/rss/",
+  "title": "Rapid7",
+  "weight": 1
+ },
+ {
+  "topic": "security",
+  "url": "https://www.recordedfuture.com/feed",
+  "title": "Recorded Future",
+  "weight": 1
+ },
+ {
+  "topic": "security",
+  "url": "https://risky.biz/feeds/risky-business-news/",
+  "title": "Risky Business News",
+  "weight": 1
+ },
+ {
+  "topic": "security",
+  "url": "https://isc.sans.edu/rssfeed_full.xml",
+  "title": "SANS Internet Storm Center",
+  "weight": 1.3
+ },
+ {
+  "topic": "security",
+  "url": "https://www.schneier.com/feed/atom/",
+  "title": "Schneier on Security",
+  "weight": 1.3
+ },
+ {
+  "topic": "security",
+  "url": "https://securelist.com/feed/",
+  "title": "Securelist",
+  "weight": 1
+ },
+ {
+  "topic": "security",
+  "url": "https://feeds.feedburner.com/securityweek",
+  "title": "SecurityWeek",
+  "weight": 0.8
+ },
+ {
+  "topic": "security",
+  "url": "https://www.sentinelone.com/labs/feed/",
+  "title": "SentinelOne Labs",
+  "weight": 1
+ },
+ {
+  "topic": "security",
+  "url": "https://feeds.feedburner.com/TheHackersNews",
+  "title": "The Hacker News",
+  "weight": 0.8
+ },
+ {
+  "topic": "security",
+  "url": "https://therecord.media/feed",
+  "title": "The Record",
+  "weight": 1
+ },
+ {
+  "topic": "security",
+  "url": "https://www.troyhunt.com/rss/",
+  "title": "Troy Hunt",
+  "weight": 1
+ },
+ {
+  "topic": "security",
+  "url": "https://unit42.paloaltonetworks.com/feed/",
+  "title": "Unit 42",
+  "weight": 1.3
+ },
+ {
+  "topic": "security",
+  "url": "https://www.welivesecurity.com/en/rss/feed/",
+  "title": "WeLiveSecurity",
+  "weight": 1
+ },
+ {
+  "topic": "security",
+  "url": "https://www.wiz.io/feed/rss.xml",
+  "title": "Wiz",
+  "weight": 0.8
+ },
+ {
+  "topic": "security",
+  "url": "https://www.zerodayinitiative.com/blog?format=rss",
+  "title": "Zero Day Initiative",
+  "weight": 1.3
+ }
+]
