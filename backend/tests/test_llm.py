@@ -124,3 +124,37 @@ def test_embeddings_stay_on_cohere_regardless_of_text_provider():
     source = inspect.getsource(llm)
     assert "def embed" not in source, "llm.py must not offer embeddings"
     assert "EMBEDDINGS ARE DELIBERATELY NOT HERE" in source
+
+
+# ------------------------------------------------------------- claude-cli
+
+def test_claude_cli_is_never_auto_selected(monkeypatch):
+    """It depends on a logged-in CLI binary that no server has, so it must be
+    opt-in only — never chosen for someone who simply has no keys set."""
+    _keys(monkeypatch)
+    assert llm.active_provider() == "cohere"
+
+    _keys(monkeypatch, anthropic="a")
+    assert llm.active_provider() == "anthropic"
+
+
+def test_claude_cli_needs_the_binary(monkeypatch):
+    import shutil as _shutil
+    _keys(monkeypatch, provider="claude-cli")
+
+    monkeypatch.setattr(llm.shutil, "which", lambda _: None)
+    assert llm.ready() is False
+
+    monkeypatch.setattr(llm.shutil, "which", lambda _: "/usr/local/bin/claude")
+    assert llm.ready() is True
+
+
+def test_claude_cli_takes_no_api_key(monkeypatch):
+    _keys(monkeypatch, provider="claude-cli")
+    assert llm._key_for("claude-cli") == "", "there is no key to leak for this provider"
+
+
+def test_claude_cli_uses_the_strong_model_for_the_brief(monkeypatch):
+    _keys(monkeypatch, provider="claude-cli")
+    assert llm.model_for("score") == "claude-sonnet-5-5"
+    assert llm.model_for("digest") == "claude-opus-5-5"
