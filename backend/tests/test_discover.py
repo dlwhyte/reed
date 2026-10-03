@@ -181,3 +181,55 @@ def test_cluster_groups_similar_and_splits_different(db_setup, monkeypatch):
 def test_cluster_is_noop_when_nothing_pending(db_setup):
     uid = _seed(db_setup)
     assert asyncio.run(discover.cluster_new_items(uid)) == {"embedded": 0, "clustered": 0}
+
+
+# ------------------------------------------------------- embed batching
+
+def test_embed_splits_into_api_sized_batches(monkeypatch):
+    """Cohere rejects >96 texts per call; embed() must chunk and keep order."""
+    from app import config
+
+    calls: list[int] = []
+
+    class _FakeResp:
+        def __init__(self, n):
+            self.embeddings = type("E", (), {"float_": [[float(i)] for i in range(n)]})()
+            self.meta = None
+
+    class _FakeClient:
+        async def embed(self, *, model, texts, input_type, embedding_types):
+            calls.append(len(texts))
+            return _FakeResp(len(texts))
+
+    monkeypatch.setattr(config, "LLM_READY", True)
+    monkeypatch.setattr(cohere_client, "client", lambda: _FakeClient())
+    monkeypatch.setattr(cohere_client, "_extract_tokens", lambda r: (0, 0))
+    monkeypatch.setattr(cohere_client, "record_usage", lambda *a, **k: None)
+
+    out = asyncio.run(cohere_client.embed(["t"] * 250))
+
+    assert calls == [96, 96, 58], f"expected three batches, got {calls}"
+    assert len(out) == 250, "every input must get a vector back"
+
+
+def test_embed_short_input_is_a_single_call(monkeypatch):
+    from app import config
+
+    calls: list[int] = []
+
+    class _FakeResp:
+        def __init__(self, n):
+            self.embeddings = type("E", (), {"float_": [[1.0]] * n})()
+
+    class _FakeClient:
+        async def embed(self, *, model, texts, input_type, embedding_types):
+            calls.append(len(texts))
+            return _FakeResp(len(texts))
+
+    monkeypatch.setattr(config, "LLM_READY", True)
+    monkeypatch.setattr(cohere_client, "client", lambda: _FakeClient())
+    monkeypatch.setattr(cohere_client, "_extract_tokens", lambda r: (0, 0))
+    monkeypatch.setattr(cohere_client, "record_usage", lambda *a, **k: None)
+
+    assert len(asyncio.run(cohere_client.embed(["a", "b", "c"]))) == 3
+    assert calls == [3]

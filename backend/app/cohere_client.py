@@ -109,23 +109,39 @@ Respond with JSON only, no prose."""
         return {"summary_short": "", "summary_long": "", "tags": []}
 
 
+# Cohere rejects an embed call carrying more than this many texts. Saving one
+# article never approached it; bulk callers (Discover clustering) do.
+MAX_EMBED_BATCH = 96
+
+
 async def embed(
     texts: list[str],
     input_type: str = "search_document",
     endpoint: str = "embed",
     user_id: int | None = None,
 ) -> list[list[float]]:
+    """Embed any number of texts, in input order.
+
+    Splits into API-sized batches; usage is recorded per batch so the
+    Settings counter stays accurate.
+    """
     if not config.LLM_READY or not texts:
         return [[] for _ in texts]
-    resp = await client().embed(
-        model=config.COHERE_EMBED_MODEL,
-        texts=[_truncate(t, 8000) for t in texts],
-        input_type=input_type,
-        embedding_types=["float"],
-    )
-    inp, out = _extract_tokens(resp)
-    record_usage(endpoint, config.COHERE_EMBED_MODEL, inp, out, user_id=user_id)
-    return resp.embeddings.float_
+
+    out_vectors: list[list[float]] = []
+    for start in range(0, len(texts), MAX_EMBED_BATCH):
+        chunk = texts[start:start + MAX_EMBED_BATCH]
+        resp = await client().embed(
+            model=config.COHERE_EMBED_MODEL,
+            texts=[_truncate(t, 8000) for t in chunk],
+            input_type=input_type,
+            embedding_types=["float"],
+        )
+        inp, out = _extract_tokens(resp)
+        record_usage(endpoint, config.COHERE_EMBED_MODEL, inp, out, user_id=user_id)
+        out_vectors.extend(resp.embeddings.float_)
+
+    return out_vectors
 
 
 async def chat_with_article_stream(
