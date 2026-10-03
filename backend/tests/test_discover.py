@@ -96,14 +96,15 @@ RSS = """<?xml version="1.0"?><rss version="2.0"><channel><title>Feed</title>
 </channel></rss>"""
 
 
-def _seed(db_setup) -> int:
-    """Fresh user plus one feed; returns the user id."""
+def _seed(db_setup, feeds: int = 1) -> int:
+    """Fresh user plus N feeds; returns the user id."""
     user = db_setup("u", "u@x", "tok")
     with db.connect() as conn:
-        conn.execute(
-            "INSERT INTO feeds (user_id, url, title, topic) VALUES (?,?,?,?)",
-            (user["id"], "https://ex.test/feed", "Feed", "test"),
-        )
+        for n in range(feeds):
+            conn.execute(
+                "INSERT INTO feeds (user_id, url, title, topic) VALUES (?,?,?,?)",
+                (user["id"], f"https://ex{n}.test/feed", f"Feed {n}", "test"),
+            )
     return user["id"]
 
 
@@ -157,14 +158,15 @@ def test_cluster_groups_similar_and_splits_different(db_setup, monkeypatch):
 
     monkeypatch.setattr(cohere_client, "embed", fake_embed)
 
-    uid = _seed(db_setup)
+    uid = _seed(db_setup, feeds=3)  # one per outlet; merging is cross-source only
     with db.connect() as conn:
-        feed_id = conn.execute("SELECT id FROM feeds WHERE user_id = ?", (uid,)).fetchone()["id"]
+        feed_ids = [r["id"] for r in
+                    conn.execute("SELECT id FROM feeds WHERE user_id = ? ORDER BY id", (uid,))]
         for n, t in enumerate(titles):
             conn.execute(
                 """INSERT INTO feed_items (user_id, feed_id, url, url_key, title, published)
                    VALUES (?, ?, ?, ?, ?, '2026-10-03T12:00:00+00:00')""",
-                (uid, feed_id, f"https://ex.test/{n}", f"https://ex.test/{n}", t),
+                (uid, feed_ids[n], f"https://ex.test/{n}", f"https://ex.test/{n}", t),
             )
 
     result = asyncio.run(discover.cluster_new_items(uid))
@@ -176,6 +178,62 @@ def test_cluster_groups_similar_and_splits_different(db_setup, monkeypatch):
 
     assert rows[titles[0]] == rows[titles[1]], "same story should share a cluster"
     assert rows[titles[2]] != rows[titles[0]], "unrelated story must not merge"
+
+
+def test_cluster_never_merges_within_one_feed(db_setup, monkeypatch):
+    """Templated feeds (CISA KEV, SANS Stormcast) publish many distinct items
+    under near-identical titles. Merging them hides real advisories, so items
+    from the same feed must stay separate however similar they look."""
+    vectors = [[1.0, 0.0], [1.0, 0.0], [1.0, 0.0]]  # identical
+
+    async def fake_embed(texts, **kwargs):
+        return vectors[: len(texts)]
+
+    monkeypatch.setattr(cohere_client, "embed", fake_embed)
+
+    uid = _seed(db_setup, feeds=1)
+    with db.connect() as conn:
+        feed_id = conn.execute("SELECT id FROM feeds WHERE user_id = ?", (uid,)).fetchone()["id"]
+        for n in range(3):
+            conn.execute(
+                """INSERT INTO feed_items (user_id, feed_id, url, url_key, title, published)
+                   VALUES (?, ?, ?, ?, 'CISA Adds One Known Exploited Vulnerability',
+                           '2026-10-03T12:00:00+00:00')""",
+                (uid, feed_id, f"https://ex.test/{n}", f"https://ex.test/{n}"),
+            )
+
+    asyncio.run(discover.cluster_new_items(uid))
+
+    with db.connect() as conn:
+        clusters = [r["cluster_id"] for r in
+                    conn.execute("SELECT cluster_id FROM feed_items ORDER BY id")]
+    assert len(set(clusters)) == 3, "identical items from one feed must not merge"
+
+
+def test_cluster_merges_identical_items_across_feeds(db_setup, monkeypatch):
+    """The same story from two outlets is exactly what clustering is for."""
+    async def fake_embed(texts, **kwargs):
+        return [[1.0, 0.0], [0.99, 0.05]][: len(texts)]
+
+    monkeypatch.setattr(cohere_client, "embed", fake_embed)
+
+    uid = _seed(db_setup, feeds=2)
+    with db.connect() as conn:
+        feed_ids = [r["id"] for r in
+                    conn.execute("SELECT id FROM feeds WHERE user_id = ? ORDER BY id", (uid,))]
+        for n, fid in enumerate(feed_ids):
+            conn.execute(
+                """INSERT INTO feed_items (user_id, feed_id, url, url_key, title, published)
+                   VALUES (?, ?, ?, ?, ?, '2026-10-03T12:00:00+00:00')""",
+                (uid, fid, f"https://s{n}.test/x", f"https://s{n}.test/x", f"Story from {n}"),
+            )
+
+    asyncio.run(discover.cluster_new_items(uid))
+
+    with db.connect() as conn:
+        clusters = [r["cluster_id"] for r in
+                    conn.execute("SELECT cluster_id FROM feed_items ORDER BY id")]
+    assert len(set(clusters)) == 1, "same story across two feeds should merge"
 
 
 def test_cluster_is_noop_when_nothing_pending(db_setup):

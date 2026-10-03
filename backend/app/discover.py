@@ -308,7 +308,7 @@ async def cluster_new_items(user_id: int, limit: int = 300) -> dict:
     """
     with connect() as conn:
         pending = [dict(r) for r in conn.execute(
-            """SELECT id, title, excerpt FROM feed_items
+            """SELECT id, feed_id, title, excerpt FROM feed_items
                 WHERE user_id = ? AND embedding IS NULL
                 ORDER BY published DESC LIMIT ?""",
             (user_id, limit),
@@ -323,9 +323,10 @@ async def cluster_new_items(user_id: int, limit: int = 300) -> dict:
 
     with connect() as conn:
         recent = [
-            (r["id"], r["cluster_id"], cohere_client.blob_to_embedding(r["embedding"]))
+            (r["id"], r["feed_id"], r["cluster_id"],
+             cohere_client.blob_to_embedding(r["embedding"]))
             for r in conn.execute(
-                """SELECT id, cluster_id, embedding FROM feed_items
+                """SELECT id, feed_id, cluster_id, embedding FROM feed_items
                     WHERE user_id = ? AND embedding IS NOT NULL
                       AND published > datetime('now', ?)""",
                 (user_id, f"-{CLUSTER_WINDOW_HOURS} hours"),
@@ -340,8 +341,12 @@ async def cluster_new_items(user_id: int, limit: int = 300) -> dict:
             blob = cohere_client.embedding_to_blob(vec)
 
             best_id, best_score = None, 0.0
-            for other_id, other_cluster, other_vec in recent:
-                if not other_vec:
+            for other_id, other_feed, other_cluster, other_vec in recent:
+                # Only ever merge ACROSS sources. Feeds with templated titles
+                # (CISA KEV, SANS Stormcast) otherwise collapse genuinely
+                # distinct advisories into one row, and hiding an actively
+                # exploited CVE costs far more than showing a near-duplicate.
+                if other_feed == item["feed_id"] or not other_vec:
                     continue
                 score = cohere_client.cosine(vec, other_vec)
                 if score > best_score:
@@ -355,7 +360,7 @@ async def cluster_new_items(user_id: int, limit: int = 300) -> dict:
                 "UPDATE feed_items SET embedding = ?, cluster_id = ? WHERE id = ?",
                 (blob, cluster_id, item["id"]),
             )
-            recent.append((item["id"], cluster_id, vec))
+            recent.append((item["id"], item["feed_id"], cluster_id, vec))
             embedded += 1
 
     return {"embedded": embedded, "clustered": clustered}
