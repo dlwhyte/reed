@@ -13,7 +13,11 @@ re-embeds the whole library on purpose.
 """
 from __future__ import annotations
 
+import asyncio
 import json
+import os
+import shutil
+import tempfile
 from typing import Any
 
 import httpx
@@ -49,11 +53,25 @@ PROVIDERS = {
         "default_model": "",
         "base_url": None,  # must come from LLM_BASE_URL
     },
+    # Uses a locally installed, already-logged-in Claude Code CLI instead of an
+    # API key. Handy on a dev machine; not available on a server, so it is
+    # never chosen automatically.
+    "claude-cli": {
+        "label": "Local Claude Code CLI",
+        "env_key": None,
+        "default_model": "claude-sonnet-5-5",
+        "default_strong_model": "claude-opus-5-5",
+    },
 }
+
+CLI_TIMEOUT = 300.0
 
 
 def _key_for(provider: str) -> str:
-    return getattr(config, PROVIDERS[provider]["env_key"], "") or ""
+    env_key = PROVIDERS[provider]["env_key"]
+    if not env_key:
+        return ""
+    return getattr(config, env_key, "") or ""
 
 
 def active_provider() -> str:
@@ -95,6 +113,8 @@ def ready() -> bool:
     # A local OpenAI-compatible server legitimately needs no key.
     if provider == "openai-compatible":
         return bool(config.LLM_BASE_URL)
+    if provider == "claude-cli":
+        return shutil.which("claude") is not None
     return bool(_key_for(provider))
 
 
@@ -163,6 +183,8 @@ async def complete(
 
     if provider == "cohere":
         text, inp, out = await _cohere(prompt, system, json_mode, use_model)
+    elif provider == "claude-cli":
+        text, inp, out = await _claude_cli(prompt, system, json_mode, use_model)
     elif provider == "anthropic":
         text, inp, out = await _anthropic(prompt, system, json_mode, use_model, max_tokens)
     else:
@@ -186,6 +208,45 @@ async def _cohere(prompt, system, json_mode, model):
     resp = await client().chat(**kwargs)
     inp, out = _extract_tokens(resp)
     return resp.message.content[0].text, inp, out
+
+
+async def _claude_cli(prompt, system, json_mode, model):
+    """Shell out to a logged-in Claude Code CLI. No API key involved."""
+    args = ["claude", "-p", "--output-format", "json", "--model", model]
+    if system:
+        args += ["--append-system-prompt", system]
+    if json_mode:
+        prompt += "\n\nRespond with a single JSON object and nothing else."
+
+    proc = await asyncio.create_subprocess_exec(
+        *args,
+        stdin=asyncio.subprocess.PIPE,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+        # Run outside any project so the CLI does not load a repo's CLAUDE.md
+        # into every scoring call.
+        cwd=tempfile.gettempdir(),
+    )
+    try:
+        out_b, err_b = await asyncio.wait_for(
+            proc.communicate(prompt.encode()), timeout=CLI_TIMEOUT
+        )
+    except asyncio.TimeoutError:
+        proc.kill()
+        raise RuntimeError(f"claude CLI timed out after {CLI_TIMEOUT}s")
+
+    if proc.returncode != 0:
+        raise RuntimeError(f"claude CLI exited {proc.returncode}: {err_b.decode()[:300]}")
+    try:
+        payload = json.loads(out_b.decode())
+    except json.JSONDecodeError:
+        raise RuntimeError(f"unparseable claude CLI output: {out_b.decode()[:300]}")
+    if payload.get("is_error"):
+        raise RuntimeError(f"claude CLI: {str(payload.get('result'))[:300]}")
+
+    usage = payload.get("usage") or {}
+    return (payload.get("result") or "",
+            usage.get("input_tokens", 0), usage.get("output_tokens", 0))
 
 
 async def _anthropic(prompt, system, json_mode, model, max_tokens):
