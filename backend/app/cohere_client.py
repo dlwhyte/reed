@@ -109,6 +109,39 @@ Respond with JSON only, no prose."""
         return {"summary_short": "", "summary_long": "", "tags": []}
 
 
+async def complete(
+    prompt: str,
+    system: str | None = None,
+    json_mode: bool = False,
+    endpoint: str = "complete",
+    model: str | None = None,
+    user_id: int | None = None,
+) -> str:
+    """One-shot completion, returned as text.
+
+    The single place Discover talks to a model. Swapping in another provider
+    (Anthropic, OpenAI, a local endpoint) means reimplementing this signature
+    and nothing else.
+    """
+    if not config.LLM_READY:
+        raise RuntimeError("LLM is disabled; set COHERE_API_KEY and ENABLE_LLM=true")
+
+    use_model = model or config.COHERE_CHAT_MODEL
+    messages = []
+    if system:
+        messages.append({"role": "system", "content": system})
+    messages.append({"role": "user", "content": prompt})
+
+    kwargs = {"model": use_model, "messages": messages}
+    if json_mode:
+        kwargs["response_format"] = {"type": "json_object"}
+
+    resp = await client().chat(**kwargs)
+    inp, out = _extract_tokens(resp)
+    record_usage(endpoint, use_model, inp, out, user_id=user_id)
+    return resp.message.content[0].text
+
+
 # Cohere rejects an embed call carrying more than this many texts. Saving one
 # article never approached it; bulk callers (Discover clustering) do.
 MAX_EMBED_BATCH = 96

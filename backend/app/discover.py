@@ -7,6 +7,7 @@ us, so polling a few hundred a day is nearly free. Promotion into `articles`
 from __future__ import annotations
 
 import asyncio
+import html
 import json
 import re
 from email.utils import parsedate_to_datetime
@@ -55,10 +56,10 @@ def url_key(raw: str) -> str:
         return raw.strip()
 
 
-def strip_html(html: str | None, limit: int = 1200) -> str:
-    if not html:
+def strip_html(raw: str | None, limit: int = 1200) -> str:
+    if not raw:
         return ""
-    text = re.sub(r"<(script|style)[\s\S]*?</\1>", " ", html, flags=re.I)
+    text = re.sub(r"<(script|style)[\s\S]*?</\1>", " ", raw, flags=re.I)
     text = re.sub(r"<[^>]+>", " ", text)
     for a, b in (("&nbsp;", " "), ("&amp;", "&"), ("&lt;", "<"),
                  ("&gt;", ">"), ("&quot;", '"'), ("&#39;", "'")):
@@ -218,6 +219,8 @@ def _store(conn, user_id: int, feed: dict, parsed: Any, cutoff: datetime) -> int
         title = _first(getattr(entry, "title", None))
         if not link or not title:
             continue
+        # Feeds ship entity-escaped titles ("Banking &amp; Government").
+        title = html.unescape(title).strip()
 
         published, dated = _entry_published(entry)
         if dated:
