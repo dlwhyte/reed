@@ -4,7 +4,7 @@ from __future__ import annotations
 import asyncio
 import json
 
-from app import cohere_client, db, discover_rank as R
+from app import db, discover_rank as R, llm
 
 
 async def _no_sleep(*_args, **_kwargs):
@@ -138,7 +138,7 @@ def test_score_pending_writes_scores(db_setup, monkeypatch):
             {"n": 3, "score": 55, "reason": "useful background", "tags": []},
         ]})
 
-    monkeypatch.setattr(cohere_client, "complete", fake_complete)
+    monkeypatch.setattr(llm, "complete", fake_complete)
     result = asyncio.run(R.score_pending(uid))
 
     assert result["scored"] == 3 and result["failed"] == 0
@@ -160,7 +160,7 @@ def test_score_clamps_out_of_range_values(db_setup, monkeypatch):
     async def fake_complete(prompt, **kwargs):
         return json.dumps({"scores": [{"n": 1, "score": 9999, "reason": "x"}]})
 
-    monkeypatch.setattr(cohere_client, "complete", fake_complete)
+    monkeypatch.setattr(llm, "complete", fake_complete)
     asyncio.run(R.score_pending(uid))
     with db.connect() as conn:
         assert conn.execute("SELECT score FROM feed_items").fetchone()["score"] == 100
@@ -179,7 +179,7 @@ def test_score_retries_then_reports_the_error(db_setup, monkeypatch):
         attempts["n"] += 1
         raise RuntimeError("429 rate limited")
 
-    monkeypatch.setattr(cohere_client, "complete", flaky)
+    monkeypatch.setattr(llm, "complete", flaky)
     monkeypatch.setattr(R.asyncio, "sleep", _no_sleep)
 
     result = asyncio.run(R.score_pending(uid))
@@ -202,7 +202,7 @@ def test_score_recovers_on_a_later_attempt(db_setup, monkeypatch):
             raise RuntimeError("429 rate limited")
         return json.dumps({"scores": [{"n": 1, "score": 70, "reason": "ok"}]})
 
-    monkeypatch.setattr(cohere_client, "complete", flaky)
+    monkeypatch.setattr(llm, "complete", flaky)
     monkeypatch.setattr(R.asyncio, "sleep", _no_sleep)
 
     result = asyncio.run(R.score_pending(uid))
@@ -230,7 +230,7 @@ def test_digest_is_cached_until_forced(db_setup, monkeypatch):
         calls["n"] += 1
         return "## The one thing\n\nSomething happened."
 
-    monkeypatch.setattr(cohere_client, "complete", fake_complete)
+    monkeypatch.setattr(llm, "complete", fake_complete)
 
     first = asyncio.run(R.build_digest(uid, force=True))
     assert calls["n"] == 1 and first["item_count"] == 1

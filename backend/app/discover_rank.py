@@ -10,7 +10,7 @@ import asyncio
 import json
 from datetime import datetime, timezone
 
-from . import cohere_client
+from . import llm
 from .db import connect
 
 SCORE_BATCH = 12
@@ -198,6 +198,7 @@ async def score_pending(user_id: int, limit: int = 200) -> dict:
     if not pending:
         return {"scored": 0, "batches": 0, "failed": 0}
 
+    score_model = f"{llm.active_provider()}:{llm.model_for('score')}"
     batches = [pending[i:i + SCORE_BATCH] for i in range(0, len(pending), SCORE_BATCH)]
     sem = asyncio.Semaphore(SCORE_CONCURRENCY)
     scored = failed = 0
@@ -212,12 +213,12 @@ async def score_pending(user_id: int, limit: int = 200) -> dict:
             # one 429 should not leave a dozen articles permanently unscored.
             for attempt in range(SCORE_ATTEMPTS):
                 try:
-                    text = await cohere_client.complete(
+                    text = await llm.complete(
                         _score_prompt(profile, taste, batch),
-                        system=SCORE_SYSTEM, json_mode=True,
+                        system=SCORE_SYSTEM, json_mode=True, task="score",
                         endpoint="discover_score", user_id=user_id,
                     )
-                    rows = json.loads(text).get("scores", [])
+                    rows = llm.extract_json(text).get("scores", [])
                     break
                 except Exception as exc:  # noqa: BLE001
                     last_exc = exc
@@ -244,7 +245,7 @@ async def score_pending(user_id: int, limit: int = 200) -> dict:
                              scored_at = datetime('now'), score_model = ? WHERE id = ?""",
                         (score, str(row.get("reason", ""))[:240],
                          json.dumps([str(t) for t in tags][:3]),
-                         "cohere", item["id"]),
+                         score_model, item["id"]),
                     )
                     scored += 1
 
@@ -331,7 +332,7 @@ async def build_digest(user_id: int, day: str | None = None, force: bool = False
               f"\n    {(it['excerpt'] or '')[:600]}"
             for n, it in enumerate(items)
         )
-        markdown = (await cohere_client.complete(
+        markdown = (await llm.complete(
             f"""Reader: {profile['role']}
 Their stated interests: {'; '.join(profile['interests']) or 'general AI and security'}
 
@@ -340,9 +341,10 @@ Today is {day}. Here are the {len(items)} highest-signal articles from the last 
 {body}
 
 Write the brief.""",
-            system=DIGEST_SYSTEM, endpoint="discover_digest", user_id=user_id,
+            system=DIGEST_SYSTEM, task="digest",
+            endpoint="discover_digest", user_id=user_id,
         )).strip()
-        model = "cohere"
+        model = f"{llm.active_provider()}:{llm.model_for('digest')}"
 
     with connect() as conn:
         conn.execute(

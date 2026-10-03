@@ -259,7 +259,7 @@ def test_embed_splits_into_api_sized_batches(monkeypatch):
             calls.append(len(texts))
             return _FakeResp(len(texts))
 
-    monkeypatch.setattr(config, "LLM_READY", True)
+    monkeypatch.setattr(config, "EMBEDDINGS_READY", True)
     monkeypatch.setattr(cohere_client, "client", lambda: _FakeClient())
     monkeypatch.setattr(cohere_client, "_extract_tokens", lambda r: (0, 0))
     monkeypatch.setattr(cohere_client, "record_usage", lambda *a, **k: None)
@@ -284,7 +284,7 @@ def test_embed_short_input_is_a_single_call(monkeypatch):
             calls.append(len(texts))
             return _FakeResp(len(texts))
 
-    monkeypatch.setattr(config, "LLM_READY", True)
+    monkeypatch.setattr(config, "EMBEDDINGS_READY", True)
     monkeypatch.setattr(cohere_client, "client", lambda: _FakeClient())
     monkeypatch.setattr(cohere_client, "_extract_tokens", lambda r: (0, 0))
     monkeypatch.setattr(cohere_client, "record_usage", lambda *a, **k: None)

@@ -158,7 +158,8 @@ async def embed(
     Splits into API-sized batches; usage is recorded per batch so the
     Settings counter stays accurate.
     """
-    if not config.LLM_READY or not texts:
+    # Embeddings are Cohere-only; LLM_READY may be true via another provider.
+    if not config.EMBEDDINGS_READY or not texts:
         return [[] for _ in texts]
 
     out_vectors: list[list[float]] = []
