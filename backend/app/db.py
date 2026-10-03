@@ -117,6 +117,92 @@ CREATE TABLE IF NOT EXISTS api_tokens (
 
 CREATE INDEX IF NOT EXISTS idx_api_tokens_user ON api_tokens(user_id);
 CREATE INDEX IF NOT EXISTS idx_api_tokens_hash ON api_tokens(token_hash);
+
+-- ---------------------------------------------------------------- Discover
+-- Feeds the user subscribes to, and the lightweight items polled from them.
+-- A feed_item is NOT an article: it holds only what the feed gave us, so a
+-- few hundred a day cost nothing. It is promoted into `articles` (full
+-- extraction, summary, embedding) only when the user saves it.
+
+CREATE TABLE IF NOT EXISTS feeds (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    url TEXT NOT NULL,
+    title TEXT,
+    site_url TEXT,
+    topic TEXT NOT NULL DEFAULT 'general',
+    weight REAL NOT NULL DEFAULT 1.0,
+    active INTEGER NOT NULL DEFAULT 1,
+    etag TEXT,
+    last_modified TEXT,
+    last_fetched_at TEXT,
+    last_status TEXT,
+    last_error TEXT,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (user_id, url),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_feeds_user ON feeds(user_id, active);
+
+CREATE TABLE IF NOT EXISTS feed_items (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    feed_id INTEGER NOT NULL,
+    url TEXT NOT NULL,
+    url_key TEXT NOT NULL,
+    title TEXT NOT NULL,
+    author TEXT,
+    excerpt TEXT,
+    image_url TEXT,
+    published TEXT,
+    fetched_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    embedding BLOB,
+    cluster_id INTEGER,
+    score INTEGER,
+    score_reason TEXT,
+    score_tags TEXT DEFAULT '[]',
+    scored_at TEXT,
+    score_model TEXT,
+    saved_article_id INTEGER,
+    dismissed_at TEXT,
+    UNIQUE (user_id, url_key),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (feed_id) REFERENCES feeds(id) ON DELETE CASCADE,
+    FOREIGN KEY (saved_article_id) REFERENCES articles(id) ON DELETE SET NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_feed_items_user_pub ON feed_items(user_id, published DESC);
+CREATE INDEX IF NOT EXISTS idx_feed_items_unscored ON feed_items(user_id, scored_at);
+CREATE INDEX IF NOT EXISTS idx_feed_items_cluster  ON feed_items(user_id, cluster_id);
+CREATE INDEX IF NOT EXISTS idx_feed_items_feed     ON feed_items(feed_id);
+
+-- One generated brief per user per day.
+CREATE TABLE IF NOT EXISTS digests (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    day TEXT NOT NULL,
+    markdown TEXT NOT NULL,
+    model TEXT,
+    item_count INTEGER DEFAULT 0,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (user_id, day),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+-- What the ranker optimises for, per user. Edited in Settings.
+CREATE TABLE IF NOT EXISTS discover_profile (
+    user_id INTEGER PRIMARY KEY,
+    role TEXT,
+    interests TEXT DEFAULT '[]',
+    mute TEXT DEFAULT '[]',
+    half_life_hours REAL DEFAULT 72,
+    hide_below INTEGER DEFAULT 25,
+    digest_items INTEGER DEFAULT 12,
+    digest_min_score INTEGER DEFAULT 55,
+    updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
 """
 
 
